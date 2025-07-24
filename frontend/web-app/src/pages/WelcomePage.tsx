@@ -18,10 +18,9 @@ import {
   ListItemText,
 } from '@mui/material'
 import {
-  Storage as DataIcon,
-  Analytics as EDAIcon,
-  AccountTree as PipelineIcon,
-  Assessment as ResultIcon,
+  Analytics,
+  AccountTree,
+  Assessment,
   CloudUpload,
   AutoAwesome,
   Speed,
