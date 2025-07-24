@@ -2,6 +2,17 @@
 REM AgenticOmics Platform Startup Script for Windows
 REM This script starts all necessary services for the platform
 
+REM Set JAVA_HOME if not already set
+if "%JAVA_HOME%"=="" (
+    if exist "C:\Program Files\Eclipse Adoptium\jdk-17*" (
+        for /d %%i in ("C:\Program Files\Eclipse Adoptium\jdk-17*") do set JAVA_HOME=%%i
+    ) else if exist "C:\Program Files\Java\jdk-17*" (
+        for /d %%i in ("C:\Program Files\Java\jdk-17*") do set JAVA_HOME=%%i
+    ) else if exist "C:\Program Files\OpenJDK\openjdk-17*" (
+        for /d %%i in ("C:\Program Files\OpenJDK\openjdk-17*") do set JAVA_HOME=%%i
+    )
+)
+
 echo 🚀 Starting AgenticOmics Platform...
 echo ======================================
 

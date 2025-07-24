@@ -5,6 +5,17 @@
 
 set -e
 
+# Set JAVA_HOME if not already set
+if [ -z "$JAVA_HOME" ]; then
+    if [ -d "/usr/lib/jvm/java-17-openjdk-amd64" ]; then
+        export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+    elif [ -d "/usr/lib/jvm/java-17-openjdk" ]; then
+        export JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
+    elif [ -d "/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home" ]; then
+        export JAVA_HOME="/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home"
+    fi
+fi
+
 echo "🚀 Starting AgenticOmics Platform..."
 echo "======================================"
 
