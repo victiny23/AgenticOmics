@@ -13,7 +13,7 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Avatar,
+
   Divider,
   Tab,
   Tabs,
@@ -81,7 +81,7 @@ const ResultPage: React.FC = () => {
     { label: 'Raw Data', icon: <Download />, description: 'Processed data matrices' },
   ]
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue)
   }
 
