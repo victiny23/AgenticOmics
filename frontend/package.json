@@ -1,0 +1,67 @@
+{
+  "name": "agenticomics-frontend",
+  "version": "1.0.0",
+  "description": "Frontend applications for AgenticOmics platform",
+  "private": true,
+  "workspaces": [
+    "web-app",
+    "admin-panel",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:web-app\" \"npm run dev:admin-panel\"",
+    "dev:web-app": "cd web-app && npm run dev",
+    "dev:admin-panel": "cd admin-panel && npm run dev",
+    "build": "npm run build:shared && npm run build:web-app && npm run build:admin-panel",
+    "build:shared": "cd shared && npm run build",
+    "build:web-app": "cd web-app && npm run build",
+    "build:admin-panel": "cd admin-panel && npm run build",
+    "test": "npm run test:shared && npm run test:web-app && npm run test:admin-panel",
+    "test:shared": "cd shared && npm run test",
+    "test:web-app": "cd web-app && npm run test",
+    "test:admin-panel": "cd admin-panel && npm run test",
+    "lint": "npm run lint:shared && npm run lint:web-app && npm run lint:admin-panel",
+    "lint:shared": "cd shared && npm run lint",
+    "lint:web-app": "cd web-app && npm run lint",
+    "lint:admin-panel": "cd admin-panel && npm run lint",
+    "format": "npm run format:shared && npm run format:web-app && npm run format:admin-panel",
+    "format:shared": "cd shared && npm run format",
+    "format:web-app": "cd web-app && npm run format",
+    "format:admin-panel": "cd admin-panel && npm run format",
+    "clean": "rm -rf node_modules web-app/node_modules admin-panel/node_modules shared/node_modules",
+    "install:all": "npm install && npm run install:workspaces",
+    "install:workspaces": "npm install --workspaces"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "concurrently": "^8.2.0",
+    "eslint": "^8.50.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "eslint-plugin-react": "^7.33.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/victiny23/AgenticOmics.git"
+  },
+  "keywords": [
+    "omics",
+    "bioinformatics",
+    "ai",
+    "data-analysis",
+    "pipeline",
+    "react",
+    "typescript"
+  ],
+  "author": "AgenticOmics Team",
+  "license": "MIT"
+}
