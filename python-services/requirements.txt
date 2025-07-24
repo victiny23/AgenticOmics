@@ -1,0 +1,97 @@
+# Core Python packages
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.23
+alembic==1.13.1
+psycopg2-binary==2.9.9
+pymongo==4.6.0
+redis==5.0.1
+
+# Message Queue
+celery==5.3.4
+kombu==5.3.4
+pika==1.3.2
+
+# AI/ML Libraries
+openai==1.3.7
+langchain==0.0.340
+langchain-openai==0.0.2
+transformers==4.36.2
+torch==2.1.1
+scikit-learn==1.3.2
+numpy==1.25.2
+pandas==2.1.4
+matplotlib==3.8.2
+seaborn==0.13.0
+plotly==5.17.0
+
+# Bioinformatics
+biopython==1.81
+pysam==0.22.0
+pyvcf3==1.0.3
+scanpy==1.9.6
+anndata==0.10.3
+
+# Data Processing
+openpyxl==3.1.2
+xlsxwriter==3.1.9
+h5py==3.10.0
+zarr==2.16.1
+
+# Web and API
+httpx==0.25.2
+aiofiles==23.2.1
+python-multipart==0.0.6
+websockets==12.0
+
+# Authentication and Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Configuration and Environment
+python-dotenv==1.0.0
+pyyaml==6.0.1
+toml==0.10.2
+
+# Logging and Monitoring
+structlog==23.2.0
+prometheus-client==0.19.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+httpx==0.25.2
+factory-boy==3.3.0
+
+# Development
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
+pre-commit==3.6.0
+
+# Jupyter (for development and analysis)
+jupyter==1.0.0
+ipykernel==6.27.1
+ipywidgets==8.1.1
+
+# File handling
+python-magic==0.4.27
+chardet==5.2.0
+
+# Async support
+asyncio==3.4.3
+aioredis==2.0.1
+asyncpg==0.29.0
+
+# Utilities
+click==8.1.7
+tqdm==4.66.1
+python-dateutil==2.8.2
+pytz==2023.3
