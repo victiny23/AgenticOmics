@@ -22,6 +22,7 @@ import {
   Home as HomeIcon,
   Storage as DataIcon,
   Analytics as EDAIcon,
+  Psychology as ModelIcon,
   AccountTree as PipelineIcon,
   Assessment as ResultIcon,
   AccountCircle,
@@ -60,6 +61,12 @@ const navigationItems: NavigationItem[] = [
     icon: <EDAIcon />,
     path: '/eda',
     description: 'Exploratory data analysis and visualization',
+  },
+  {
+    text: 'Model',
+    icon: <ModelIcon />,
+    path: '/model',
+    description: 'Build and train machine learning models',
   },
   {
     text: 'Pipeline',
