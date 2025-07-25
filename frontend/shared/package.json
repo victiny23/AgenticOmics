@@ -1,0 +1,22 @@
+{
+  "name": "agenticomics-shared",
+  "version": "1.0.0",
+  "description": "Shared components and utilities for AgenticOmics frontend applications",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "lint": "eslint . --ext ts,tsx",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\""
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "@mui/material": "^5.14.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "typescript": "^5.2.0",
+    "vitest": "^0.34.0"
+  }
+}
