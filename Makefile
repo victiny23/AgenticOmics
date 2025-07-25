@@ -56,7 +56,7 @@ build-backend:
 	docker-compose build api-gateway auth-service data-management-service pipeline-engine-service
 
 build-frontend:
-	cd frontend && npm run build
+	cd frontend/web-app && npm install && npm run build
 	docker-compose build web-app admin-panel
 
 build-python:
@@ -90,7 +90,7 @@ setup:
 	@echo "1. Installing backend dependencies..."
 	cd backend && mvn clean install -DskipTests
 	@echo "2. Installing frontend dependencies..."
-	cd frontend && npm install
+	cd frontend/web-app && npm install
 	@echo "3. Installing Python dependencies..."
 	cd python-services && pip install -r requirements.txt
 	@echo "4. Starting infrastructure services..."
@@ -115,7 +115,7 @@ monitor:
 security-scan:
 	@echo "Running security scans..."
 	cd backend && mvn org.owasp:dependency-check-maven:check
-	cd frontend && npm audit
+	cd frontend/web-app && npm audit
 	cd python-services && safety check
 
 # Documentation
@@ -139,3 +139,31 @@ helm-upgrade:
 
 helm-uninstall:
 	helm uninstall agenticomics
+
+# Individual service development (without Docker)
+dev-web:
+	@echo "Starting web application development server..."
+	cd frontend/web-app && npm install && npm run dev
+
+dev-backend-local:
+	@echo "Starting backend services locally..."
+	cd backend && mvn spring-boot:run
+
+dev-python-local:
+	@echo "Starting Python services locally..."
+	cd python-services && python -m uvicorn main:app --reload --port 8001
+
+# Help
+help:
+	@echo "Available commands:"
+	@echo "  setup              - Set up development environment"
+	@echo "  dev                - Start all services in development mode"
+	@echo "  dev-web            - Start web app development server (no Docker)"
+	@echo "  dev-backend-local  - Start backend locally (no Docker)"
+	@echo "  dev-python-local   - Start Python services locally (no Docker)"
+	@echo "  prod               - Start all services in production mode"
+	@echo "  build              - Build all services"
+	@echo "  test               - Run all tests"
+	@echo "  stop               - Stop all services"
+	@echo "  clean              - Clean up containers and volumes"
+	@echo "  logs               - View logs from all services"
