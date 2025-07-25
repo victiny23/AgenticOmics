@@ -5,6 +5,7 @@ import Layout from './components/Layout/Layout'
 import WelcomePage from './pages/WelcomePage'
 import DataPage from './pages/DataPage'
 import EDAPage from './pages/EDAPage'
+import ModelPage from './pages/ModelPage'
 import PipelinePage from './pages/PipelinePage'
 import ResultPage from './pages/ResultPage'
 
@@ -17,6 +18,7 @@ function App() {
           <Route path="/welcome" element={<WelcomePage />} />
           <Route path="/data" element={<DataPage />} />
           <Route path="/eda" element={<EDAPage />} />
+          <Route path="/model" element={<ModelPage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/result" element={<ResultPage />} />
         </Routes>
