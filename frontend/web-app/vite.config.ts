@@ -6,11 +6,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    host: true,
+    host: '0.0.0.0', // Allow external access
+    cors: true, // Enable CORS
     proxy: {
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+        secure: false,
+        ws: true, // Enable WebSocket proxying
       },
     },
   },
