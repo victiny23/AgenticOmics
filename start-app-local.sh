@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# AgenticOmics Platform Startup Script
-# This script starts all necessary services for the platform
+# AgenticOmics Platform Local-Only Startup Script
+# This script starts all services with localhost binding for security
 
 set -e
 
@@ -16,10 +16,10 @@ if [ -z "$JAVA_HOME" ]; then
     fi
 fi
 
-echo "🚀 Starting AgenticOmics Platform (Local Access Only)..."
+echo "🔒 Starting AgenticOmics Platform (Local Access Only)..."
 echo "======================================================="
-echo "🔒 Security Mode: Localhost only (recommended)"
-echo "   For network access, use: ./start-app-network.sh"
+echo "🖥️  Access Mode: Localhost only (secure)"
+echo "   This is the recommended mode for development"
 echo ""
 
 # Check if we're in the right directory
@@ -38,6 +38,7 @@ check_port() {
             echo "⚠️  Port $port is already in use. Stopping existing processes..."
             pkill -f "spring-boot:run" 2>/dev/null || true
             pkill -f "npm start" 2>/dev/null || true
+            pkill -f "vite" 2>/dev/null || true
             sleep 2
         fi
     fi
@@ -79,12 +80,16 @@ wait_for_service() {
 echo "🧹 Cleaning up any existing processes..."
 pkill -f "spring-boot:run" 2>/dev/null || true
 pkill -f "npm start" 2>/dev/null || true
+pkill -f "vite" 2>/dev/null || true
 sleep 2
 
 # Check required ports
 check_port 8080
 check_port 8081
 check_port 3000
+
+# Create logs directory
+mkdir -p logs
 
 # Step 1: Build backend (if needed)
 echo ""
@@ -99,14 +104,14 @@ else
 fi
 cd ..
 
-# Step 2: Start API Gateway
+# Step 2: Start API Gateway (localhost only)
 echo ""
-echo "🌐 Starting API Gateway (port 8080)..."
+echo "🌐 Starting API Gateway (port 8080) - localhost only..."
 ./run-services.sh gateway > logs/gateway.log 2>&1 &
 GATEWAY_PID=$!
 
-# Step 3: Start Authentication Service
-echo "🔐 Starting Authentication Service (port 8081)..."
+# Step 3: Start Authentication Service (localhost only)
+echo "🔐 Starting Authentication Service (port 8081) - localhost only..."
 ./run-services.sh auth > logs/auth.log 2>&1 &
 AUTH_PID=$!
 
@@ -114,10 +119,10 @@ AUTH_PID=$!
 wait_for_service 8080 "API Gateway"
 wait_for_service 8081 "Authentication Service"
 
-# Step 4: Start Frontend
+# Step 4: Start Frontend (localhost only)
 echo ""
-echo "🎨 Starting Frontend Application (port 3000)..."
-cd frontend
+echo "🎨 Starting Frontend Application (port 3000) - localhost only..."
+cd frontend/web-app
 
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then
@@ -125,25 +130,24 @@ if [ ! -d "node_modules" ]; then
     npm install --silent
 fi
 
-# Start the frontend
+# Start the frontend (localhost only)
 echo "   Starting React development server..."
-npm start > ../logs/frontend.log 2>&1 &
+npm run dev > ../../logs/frontend.log 2>&1 &
 FRONTEND_PID=$!
-cd ..
+cd ../..
 
 # Wait for frontend
 wait_for_service 3000 "Frontend Application"
 
 # Create PID file for cleanup
-mkdir -p logs
 echo "$GATEWAY_PID $AUTH_PID $FRONTEND_PID" > logs/app-pids.txt
 
 echo ""
-echo "🎉 AgenticOmics Platform Started Successfully!"
-echo "=============================================="
+echo "🎉 AgenticOmics Platform Started Successfully (Local Access Only)!"
+echo "=================================================================="
 echo ""
 echo "📱 Access the application:"
-echo "   🌐 Main Application: http://localhost:3000"
+echo "   🏠 Main Application: http://localhost:3000"
 echo "   🔧 API Gateway:      http://localhost:8080"
 echo "   🔐 Auth Service:     http://localhost:8081"
 echo ""
@@ -157,11 +161,8 @@ echo "   - logs/gateway.log"
 echo "   - logs/auth.log"
 echo "   - logs/frontend.log"
 echo ""
-echo "🛑 To stop all services:"
-echo "   ./stop-app.sh"
-echo "   or press Ctrl+C in this terminal"
-echo ""
-echo "🎯 Open your browser and go to: http://localhost:3000"
+echo "🌐 Need network access? Use: ./start-app-network.sh"
+echo "🛑 To stop all services: ./stop-app.sh or press Ctrl+C"
 echo ""
 
 # Keep the script running and handle Ctrl+C
@@ -179,6 +180,7 @@ cleanup() {
     
     pkill -f "spring-boot:run" 2>/dev/null || true
     pkill -f "npm start" 2>/dev/null || true
+    pkill -f "vite" 2>/dev/null || true
     
     echo "✅ All services stopped"
     exit 0
