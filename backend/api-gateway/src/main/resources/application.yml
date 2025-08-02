@@ -7,6 +7,10 @@ spring:
     name: api-gateway
   profiles:
     active: dev
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
   cloud:
     gateway:
       routes:
