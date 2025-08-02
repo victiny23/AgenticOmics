@@ -123,12 +123,16 @@ cd ..
 # Step 2: Start API Gateway with network access
 echo ""
 echo "🌐 Starting API Gateway (port 8080) with network access..."
-SERVER_ADDRESS="$LOCAL_IP" ./run-services.sh gateway > logs/gateway.log 2>&1 &
+export SERVER_ADDRESS="$LOCAL_IP"
+export NETWORK_MODE="enabled"
+./run-services.sh gateway > logs/gateway.log 2>&1 &
 GATEWAY_PID=$!
 
 # Step 3: Start Authentication Service with network access
 echo "🔐 Starting Authentication Service (port 8081) with network access..."
-SERVER_ADDRESS="$LOCAL_IP" ./run-services.sh auth > logs/auth.log 2>&1 &
+export SERVER_ADDRESS="$LOCAL_IP"
+export NETWORK_MODE="enabled"
+./run-services.sh auth > logs/auth.log 2>&1 &
 AUTH_PID=$!
 
 # Wait for backend services
@@ -148,7 +152,9 @@ fi
 
 # Start the frontend with network access
 echo "   Starting React development server with network access..."
-VITE_HOST="$LOCAL_IP" VITE_API_TARGET="http://$LOCAL_IP:8080" npm run dev > ../../logs/frontend.log 2>&1 &
+export VITE_HOST="$LOCAL_IP"
+export VITE_API_TARGET="http://$LOCAL_IP:8080"
+npm run dev > ../../logs/frontend.log 2>&1 &
 FRONTEND_PID=$!
 cd ../..
 
