@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# AgenticOmics Platform Startup Script
-# This script starts all necessary services for the platform
+# AgenticOmics Platform Network-Enabled Startup Script
+# This script starts all services with network access enabled for local network sharing
 
 set -e
 
@@ -16,10 +16,32 @@ if [ -z "$JAVA_HOME" ]; then
     fi
 fi
 
-echo "🚀 Starting AgenticOmics Platform (Local Access Only)..."
+# Function to get local IP address for display purposes
+get_local_ip() {
+    if command -v hostname >/dev/null 2>&1; then
+        # Try hostname first (works in most environments)
+        hostname -I | awk '{print $1}' 2>/dev/null || echo "your-ip-address"
+    elif command -v ip >/dev/null 2>&1; then
+        # Linux
+        ip route get 8.8.8.8 | awk '{print $7; exit}' 2>/dev/null || echo "your-ip-address"
+    elif command -v ifconfig >/dev/null 2>&1; then
+        # macOS/BSD
+        ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1 || echo "your-ip-address"
+    else
+        echo "your-ip-address"
+    fi
+}
+
+# Use 0.0.0.0 for binding to all interfaces
+BIND_IP="0.0.0.0"
+# Get actual IP for display purposes
+DISPLAY_IP=$(get_local_ip)
+
+echo "🌐 Starting AgenticOmics Platform with Network Access..."
 echo "======================================================="
-echo "🔒 Security Mode: Localhost only (recommended)"
-echo "   For network access, use: ./start-app-network.sh"
+echo "🖥️  Local IP Address: $DISPLAY_IP (binding to all interfaces)"
+echo "⚠️  Security Notice: Services will be accessible to devices on your local network"
+echo "   Only use this on trusted networks (home WiFi, etc.)"
 echo ""
 
 # Check if we're in the right directory
@@ -38,6 +60,7 @@ check_port() {
             echo "⚠️  Port $port is already in use. Stopping existing processes..."
             pkill -f "spring-boot:run" 2>/dev/null || true
             pkill -f "npm start" 2>/dev/null || true
+            pkill -f "vite" 2>/dev/null || true
             sleep 2
         fi
     fi
@@ -79,12 +102,16 @@ wait_for_service() {
 echo "🧹 Cleaning up any existing processes..."
 pkill -f "spring-boot:run" 2>/dev/null || true
 pkill -f "npm start" 2>/dev/null || true
+pkill -f "vite" 2>/dev/null || true
 sleep 2
 
 # Check required ports
 check_port 8080
 check_port 8081
 check_port 3000
+
+# Create logs directory
+mkdir -p logs
 
 # Step 1: Build backend (if needed)
 echo ""
@@ -99,14 +126,18 @@ else
 fi
 cd ..
 
-# Step 2: Start API Gateway
+# Step 2: Start API Gateway with network access
 echo ""
-echo "🌐 Starting API Gateway (port 8080)..."
+echo "🌐 Starting API Gateway (port 8080) with network access..."
+export SERVER_ADDRESS="$BIND_IP"
+export NETWORK_MODE="enabled"
 ./run-services.sh gateway > logs/gateway.log 2>&1 &
 GATEWAY_PID=$!
 
-# Step 3: Start Authentication Service
-echo "🔐 Starting Authentication Service (port 8081)..."
+# Step 3: Start Authentication Service with network access
+echo "🔐 Starting Authentication Service (port 8081) with network access..."
+export SERVER_ADDRESS="$BIND_IP"
+export NETWORK_MODE="enabled"
 ./run-services.sh auth > logs/auth.log 2>&1 &
 AUTH_PID=$!
 
@@ -114,10 +145,10 @@ AUTH_PID=$!
 wait_for_service 8080 "API Gateway"
 wait_for_service 8081 "Authentication Service"
 
-# Step 4: Start Frontend
+# Step 4: Start Frontend with network access
 echo ""
-echo "🎨 Starting Frontend Application (port 3000)..."
-cd frontend
+echo "🎨 Starting Frontend Application with Network Access (port 3000)..."
+cd frontend/web-app
 
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then
@@ -125,27 +156,34 @@ if [ ! -d "node_modules" ]; then
     npm install --silent
 fi
 
-# Start the frontend
-echo "   Starting React development server..."
-npm start > ../logs/frontend.log 2>&1 &
+# Start the frontend with network access
+echo "   Starting React development server with network access..."
+export VITE_HOST="$BIND_IP"
+export VITE_API_TARGET="http://$BIND_IP:8080"
+npm run dev > ../../logs/frontend.log 2>&1 &
 FRONTEND_PID=$!
-cd ..
+cd ../..
 
 # Wait for frontend
 wait_for_service 3000 "Frontend Application"
 
 # Create PID file for cleanup
-mkdir -p logs
 echo "$GATEWAY_PID $AUTH_PID $FRONTEND_PID" > logs/app-pids.txt
 
 echo ""
-echo "🎉 AgenticOmics Platform Started Successfully!"
-echo "=============================================="
+echo "🎉 AgenticOmics Platform Started Successfully with Network Access!"
+echo "=================================================================="
 echo ""
 echo "📱 Access the application:"
-echo "   🌐 Main Application: http://localhost:3000"
-echo "   🔧 API Gateway:      http://localhost:8080"
-echo "   🔐 Auth Service:     http://localhost:8081"
+echo "   🏠 Local Access:"
+echo "      • Main Application: http://localhost:3000"
+echo "      • API Gateway:      http://localhost:8080"
+echo "      • Auth Service:     http://localhost:8081"
+echo ""
+echo "   🌐 Network Access (from other devices on same network):"
+echo "      • Main Application: http://$DISPLAY_IP:3000"
+echo "      • API Gateway:      http://$DISPLAY_IP:8080"
+echo "      • Auth Service:     http://$DISPLAY_IP:8081"
 echo ""
 echo "📋 Service Status:"
 echo "   ✅ API Gateway running (PID: $GATEWAY_PID)"
@@ -157,11 +195,13 @@ echo "   - logs/gateway.log"
 echo "   - logs/auth.log"
 echo "   - logs/frontend.log"
 echo ""
+echo "🔗 Share these URLs with others on your network:"
+echo "   📱 Mobile/Tablet: http://$DISPLAY_IP:3000"
+echo "   💻 Other Laptops: http://$DISPLAY_IP:3000"
+echo ""
 echo "🛑 To stop all services:"
 echo "   ./stop-app.sh"
 echo "   or press Ctrl+C in this terminal"
-echo ""
-echo "🎯 Open your browser and go to: http://localhost:3000"
 echo ""
 
 # Keep the script running and handle Ctrl+C
@@ -179,6 +219,7 @@ cleanup() {
     
     pkill -f "spring-boot:run" 2>/dev/null || true
     pkill -f "npm start" 2>/dev/null || true
+    pkill -f "vite" 2>/dev/null || true
     
     echo "✅ All services stopped"
     exit 0
