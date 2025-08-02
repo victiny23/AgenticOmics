@@ -47,12 +47,25 @@ cp .env.example .env
 # Start the platform
 make setup  # Install dependencies and start infrastructure
 make dev    # Start all services
+
+# OR for network access (share with others on same WiFi):
+./start-app-network.sh  # Start with network access enabled
 ```
 
 Access the platform:
 - **Web App**: http://localhost:3000
 - **Admin Panel**: http://localhost:3001
 - **API Gateway**: http://localhost:8080
+
+### 🌐 Network Access (NEW!)
+**Secure by default** - runs localhost-only. Enable network access when needed:
+```bash
+./start-app.sh          # Secure localhost-only (default)
+./start-app-network.sh  # Enable network access (trusted networks only)
+python3 setup-external-access.py info  # Get network URLs to share
+```
+⚠️ **Security**: Network mode binds to local IP (not 0.0.0.0) with restrictive CORS.  
+See [Network Access Guide](NETWORK_ACCESS_README.md) for details.
 
 ## 🏗️ Architecture
 
