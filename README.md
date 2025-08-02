@@ -58,11 +58,13 @@ Access the platform:
 - **API Gateway**: http://localhost:8080
 
 ### 🌐 Network Access (NEW!)
-Share your app with others on the same WiFi network:
+**Secure by default** - runs localhost-only. Enable network access when needed:
 ```bash
-./start-app-network.sh  # Start with network access
+./start-app.sh          # Secure localhost-only (default)
+./start-app-network.sh  # Enable network access (trusted networks only)
 python3 setup-external-access.py info  # Get network URLs to share
 ```
+⚠️ **Security**: Network mode binds to local IP (not 0.0.0.0) with restrictive CORS.  
 See [Network Access Guide](NETWORK_ACCESS_README.md) for details.
 
 ## 🏗️ Architecture

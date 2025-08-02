@@ -34,6 +34,8 @@ LOCAL_IP=$(get_local_ip)
 echo "🌐 Starting AgenticOmics Platform with Network Access..."
 echo "======================================================="
 echo "🖥️  Local IP Address: $LOCAL_IP"
+echo "⚠️  Security Notice: Services will be accessible to devices on your local network"
+echo "   Only use this on trusted networks (home WiFi, etc.)"
 echo ""
 
 # Check if we're in the right directory
@@ -118,15 +120,15 @@ else
 fi
 cd ..
 
-# Step 2: Start API Gateway
+# Step 2: Start API Gateway with network access
 echo ""
-echo "🌐 Starting API Gateway (port 8080)..."
-./run-services.sh gateway > logs/gateway.log 2>&1 &
+echo "🌐 Starting API Gateway (port 8080) with network access..."
+SERVER_ADDRESS="$LOCAL_IP" ./run-services.sh gateway > logs/gateway.log 2>&1 &
 GATEWAY_PID=$!
 
-# Step 3: Start Authentication Service
-echo "🔐 Starting Authentication Service (port 8081)..."
-./run-services.sh auth > logs/auth.log 2>&1 &
+# Step 3: Start Authentication Service with network access
+echo "🔐 Starting Authentication Service (port 8081) with network access..."
+SERVER_ADDRESS="$LOCAL_IP" ./run-services.sh auth > logs/auth.log 2>&1 &
 AUTH_PID=$!
 
 # Wait for backend services
@@ -146,7 +148,7 @@ fi
 
 # Start the frontend with network access
 echo "   Starting React development server with network access..."
-npm run dev > ../../logs/frontend.log 2>&1 &
+VITE_HOST="$LOCAL_IP" VITE_API_TARGET="http://$LOCAL_IP:8080" npm run dev > ../../logs/frontend.log 2>&1 &
 FRONTEND_PID=$!
 cd ../..
 
