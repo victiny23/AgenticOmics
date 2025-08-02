@@ -16,24 +16,30 @@ if [ -z "$JAVA_HOME" ]; then
     fi
 fi
 
-# Function to get local IP address
+# Function to get local IP address for display purposes
 get_local_ip() {
-    if command -v ip >/dev/null 2>&1; then
+    if command -v hostname >/dev/null 2>&1; then
+        # Try hostname first (works in most environments)
+        hostname -I | awk '{print $1}' 2>/dev/null || echo "your-ip-address"
+    elif command -v ip >/dev/null 2>&1; then
         # Linux
-        ip route get 8.8.8.8 | awk '{print $7; exit}' 2>/dev/null || echo "localhost"
+        ip route get 8.8.8.8 | awk '{print $7; exit}' 2>/dev/null || echo "your-ip-address"
     elif command -v ifconfig >/dev/null 2>&1; then
         # macOS/BSD
-        ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1 || echo "localhost"
+        ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1 || echo "your-ip-address"
     else
-        echo "localhost"
+        echo "your-ip-address"
     fi
 }
 
-LOCAL_IP=$(get_local_ip)
+# Use 0.0.0.0 for binding to all interfaces
+BIND_IP="0.0.0.0"
+# Get actual IP for display purposes
+DISPLAY_IP=$(get_local_ip)
 
 echo "🌐 Starting AgenticOmics Platform with Network Access..."
 echo "======================================================="
-echo "🖥️  Local IP Address: $LOCAL_IP"
+echo "🖥️  Local IP Address: $DISPLAY_IP (binding to all interfaces)"
 echo "⚠️  Security Notice: Services will be accessible to devices on your local network"
 echo "   Only use this on trusted networks (home WiFi, etc.)"
 echo ""
@@ -123,14 +129,14 @@ cd ..
 # Step 2: Start API Gateway with network access
 echo ""
 echo "🌐 Starting API Gateway (port 8080) with network access..."
-export SERVER_ADDRESS="$LOCAL_IP"
+export SERVER_ADDRESS="$BIND_IP"
 export NETWORK_MODE="enabled"
 ./run-services.sh gateway > logs/gateway.log 2>&1 &
 GATEWAY_PID=$!
 
 # Step 3: Start Authentication Service with network access
 echo "🔐 Starting Authentication Service (port 8081) with network access..."
-export SERVER_ADDRESS="$LOCAL_IP"
+export SERVER_ADDRESS="$BIND_IP"
 export NETWORK_MODE="enabled"
 ./run-services.sh auth > logs/auth.log 2>&1 &
 AUTH_PID=$!
@@ -152,8 +158,8 @@ fi
 
 # Start the frontend with network access
 echo "   Starting React development server with network access..."
-export VITE_HOST="$LOCAL_IP"
-export VITE_API_TARGET="http://$LOCAL_IP:8080"
+export VITE_HOST="$BIND_IP"
+export VITE_API_TARGET="http://$BIND_IP:8080"
 npm run dev > ../../logs/frontend.log 2>&1 &
 FRONTEND_PID=$!
 cd ../..
@@ -175,9 +181,9 @@ echo "      • API Gateway:      http://localhost:8080"
 echo "      • Auth Service:     http://localhost:8081"
 echo ""
 echo "   🌐 Network Access (from other devices on same network):"
-echo "      • Main Application: http://$LOCAL_IP:3000"
-echo "      • API Gateway:      http://$LOCAL_IP:8080"
-echo "      • Auth Service:     http://$LOCAL_IP:8081"
+echo "      • Main Application: http://$DISPLAY_IP:3000"
+echo "      • API Gateway:      http://$DISPLAY_IP:8080"
+echo "      • Auth Service:     http://$DISPLAY_IP:8081"
 echo ""
 echo "📋 Service Status:"
 echo "   ✅ API Gateway running (PID: $GATEWAY_PID)"
@@ -190,8 +196,8 @@ echo "   - logs/auth.log"
 echo "   - logs/frontend.log"
 echo ""
 echo "🔗 Share these URLs with others on your network:"
-echo "   📱 Mobile/Tablet: http://$LOCAL_IP:3000"
-echo "   💻 Other Laptops: http://$LOCAL_IP:3000"
+echo "   📱 Mobile/Tablet: http://$DISPLAY_IP:3000"
+echo "   💻 Other Laptops: http://$DISPLAY_IP:3000"
 echo ""
 echo "🛑 To stop all services:"
 echo "   ./stop-app.sh"

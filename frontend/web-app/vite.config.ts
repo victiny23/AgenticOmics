@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    host: process.env.VITE_HOST || 'localhost', // Configurable host, defaults to localhost for security
+    host: process.env.VITE_HOST || '0.0.0.0', // Configurable host, defaults to 0.0.0.0 to allow network access
     cors: true, // Enable CORS
     strictPort: false, // Allow fallback to other ports if 3000 is busy
     proxy: {
