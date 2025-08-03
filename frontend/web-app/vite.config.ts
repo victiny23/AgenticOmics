@@ -9,12 +9,13 @@ export default defineConfig({
     strictPort: true,
     cors: true,
     allowedHosts: [
-      'work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev',
+      'agentic.omics',
       'localhost',
-      '0.0.0.0'
+      '0.0.0.0',
+      '.ngrok-free.app'
     ]
   },
   define: {
-    'process.env.VITE_API_URL': JSON.stringify('https://work-2-icenfkwxmrkedzin.prod-runtime.all-hands.dev')
+    'process.env.VITE_API_URL': JSON.stringify('https://api.agentic.omics')
   }
 })

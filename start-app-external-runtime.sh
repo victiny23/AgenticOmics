@@ -7,10 +7,10 @@ set -e
 
 echo "🌍 Starting AgenticOmics Platform for External Runtime Access..."
 echo "========================================================"
-echo "🖥️  Runtime Environment: OpenHands"
+echo "🖥️  Runtime Environment: Custom Domain"
 echo "🌐 External URLs:"
-echo "   • Main App: https://work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev"
-echo "   • API Gateway: https://work-2-icenfkwxmrkedzin.prod-runtime.all-hands.dev"
+echo "   • Main App: https://agentic.omics"
+echo "   • API Gateway: https://api.agentic.omics"
 echo "⚠️  Security Notice: Services will be accessible from the internet"
 echo
 
@@ -21,8 +21,8 @@ export API_GATEWAY_PORT=12001
 export AUTH_PORT=8081
 export VITE_HOST=0.0.0.0
 export VITE_PORT=12000
-export VITE_API_TARGET=https://work-2-icenfkwxmrkedzin.prod-runtime.all-hands.dev
-export CORS_ALLOWED_ORIGINS=https://work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev,http://localhost:12000,http://0.0.0.0:12000
+export VITE_API_TARGET=https://api.agentic.omics
+export CORS_ALLOWED_ORIGINS=https://agentic.omics,http://localhost:12000,http://0.0.0.0:12000
 
 echo "🧹 Cleaning up any existing processes..."
 ./stop-app.sh 2>/dev/null || true
@@ -98,9 +98,10 @@ export default defineConfig({
     strictPort: true,
     cors: true,
     allowedHosts: [
-      'work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev',
+      'agentic.omics',
       'localhost',
-      '0.0.0.0'
+      '0.0.0.0',
+      '.ngrok-free.app'
     ]
   },
   define: {
@@ -125,14 +126,48 @@ for i in {1..30}; do
     sleep 2
 done
 
+# Get current ngrok URL if ngrok is running
+echo "🌐 Checking for ngrok tunnel..."
+if pgrep -x "ngrok" > /dev/null; then
+    echo "📋 Getting current ngrok URL..."
+    NGROK_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | python3 -c "import sys, json; data = json.load(sys.stdin); print(data['tunnels'][0]['public_url'])" 2>/dev/null || echo "")
+    
+    if [ -n "$NGROK_URL" ]; then
+        echo "✅ Found ngrok tunnel: $NGROK_URL"
+        
+        # Update status check script with current ngrok URL
+        echo "📝 Updating status check script..."
+        sed -i.bak "s|https://[a-zA-Z0-9-]*\.ngrok-free\.app|$NGROK_URL|g" check-external-status.sh 2>/dev/null || true
+        
+        # Test the ngrok URL
+        echo "🧪 Testing ngrok access..."
+        sleep 2
+        NGROK_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$NGROK_URL" || echo "000")
+        
+        if [ "$NGROK_STATUS" = "200" ]; then
+            echo "✅ Ngrok access working!"
+            EXTERNAL_URL="$NGROK_URL"
+        else
+            echo "⚠️  Ngrok access failed (Status: $NGROK_STATUS)"
+            EXTERNAL_URL="https://agentic.omics"
+        fi
+    else
+        echo "⚠️  Ngrok is running but no tunnel found"
+        EXTERNAL_URL="https://agentic.omics"
+    fi
+else
+    echo "ℹ️  Ngrok not running - using custom domain"
+    EXTERNAL_URL="https://agentic.omics"
+fi
+
 echo
 echo "🎉 AgenticOmics Platform Started Successfully with External Runtime Access!"
 echo "=================================================================="
 echo
 echo "📱 Access the application:"
 echo "   🌍 External Access (from anywhere on the internet):"
-echo "      • Main Application: https://work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev"
-echo "      • API Gateway:      https://work-2-icenfkwxmrkedzin.prod-runtime.all-hands.dev"
+echo "      • Main Application: $EXTERNAL_URL"
+echo "      • API Gateway:      $EXTERNAL_URL/api"
 echo
 echo "   🏠 Local Access (for testing):"
 echo "      • Main Application: http://localhost:$FRONTEND_PORT"
@@ -150,7 +185,7 @@ echo "   - logs/auth.log"
 echo "   - logs/frontend.log"
 echo
 echo "🔗 Share this URL with others:"
-echo "   🌍 https://work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev"
+echo "   🌍 $EXTERNAL_URL"
 echo
 echo "🛑 To stop all services:"
 echo "   ./stop-app.sh"
@@ -158,14 +193,14 @@ echo "   or press Ctrl+C in this terminal"
 echo
 
 # Create a simple status check script
-cat > check-external-status.sh << 'EOF'
+cat > check-external-status.sh << EOF
 #!/bin/bash
 echo "🧪 Testing External Access..."
 echo "================================"
 echo -n "Frontend (External): "
-curl -s -o /dev/null -w "%{http_code}" https://work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev && echo " ✅" || echo " ❌"
+curl -s -o /dev/null -w "%{http_code}" $EXTERNAL_URL && echo " ✅" || echo " ❌"
 echo -n "API Gateway (External): "
-curl -s -o /dev/null -w "%{http_code}" https://work-2-icenfkwxmrkedzin.prod-runtime.all-hands.dev && echo " ✅" || echo " ❌"
+curl -s -o /dev/null -w "%{http_code}" $EXTERNAL_URL/api && echo " ✅" || echo " ❌"
 echo -n "Frontend (Local): "
 curl -s -o /dev/null -w "%{http_code}" http://localhost:12000 && echo " ✅" || echo " ❌"
 echo -n "API Gateway (Local): "

@@ -10,8 +10,8 @@
 ### 1. **Runtime Environment Configuration**
 - Created `start-app-external-runtime.sh` script
 - Configured services to use the provided external ports:
-  - **Frontend**: Port 12000 → https://work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev
-  - **API Gateway**: Port 12001 → https://work-2-icenfkwxmrkedzin.prod-runtime.all-hands.dev
+  - **Frontend**: Port 12000 → https://agentic.omics
+  - **API Gateway**: Port 12001 → https://api.agentic.omics
   - **Auth Service**: Port 8081 (internal)
 
 ### 2. **Service Configuration**
@@ -21,8 +21,8 @@
 - **Environment Variables**: Set proper API targets
 
 ### 3. **External Access URLs** 🌐
-- **Main Application**: https://work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev
-- **API Gateway**: https://work-2-icenfkwxmrkedzin.prod-runtime.all-hands.dev
+- **Main Application**: https://agentic.omics
+- **API Gateway**: https://api.agentic.omics
 
 ## Testing Results ✅
 
@@ -75,7 +75,7 @@ API Gateway (Local): 401 ✅    # Expected (requires authentication)
 ### Network Configuration
 - **Container IP**: 10.2.75.38 (internal)
 - **Public IP**: 34.70.174.52 (host)
-- **External URLs**: Provided by runtime environment
+- **External URLs**: Custom domain configuration
 - **Port Mapping**: 12000 (frontend), 12001 (API gateway)
 
 ### Security Configuration
