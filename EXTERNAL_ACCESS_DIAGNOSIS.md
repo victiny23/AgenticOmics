@@ -29,15 +29,15 @@ The container network is isolated from direct external access for security reaso
 
 ## 🛠️ Solutions for External Access
 
-### Option 1: Use the Provided External URLs 🌍
-The runtime environment provides external access URLs:
-- **Main App**: https://work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev (port 12000)
-- **API Gateway**: https://work-2-icenfkwxmrkedzin.prod-runtime.all-hands.dev (port 12001)
+### Option 1: Use Custom Domain Configuration 🌍
+Configure the application to use a custom domain:
+- **Main App**: https://agentic.omics (port 12000)
+- **API Gateway**: https://api.agentic.omics (port 12001)
 
 **To use these:**
 1. Stop current services: `./stop-app.sh`
 2. Modify the startup script to use ports 12000 and 12001
-3. Configure CORS to allow the external domains
+3. Configure CORS to allow the custom domains
 
 ### Option 2: SSH Tunneling (Most Reliable) 🔐
 If you have SSH access to the server:
@@ -55,23 +55,23 @@ Use services like:
 - **localtunnel**: `lt --port 3000`
 - **serveo**: `ssh -R 80:localhost:3000 serveo.net`
 
-### Option 4: Configure for Runtime Environment 🔧
-Modify the application to use the provided external ports:
+### Option 4: Configure for Custom Domain 🔧
+Modify the application to use custom domain configuration:
 
 ```bash
 # Set environment variables for external access
 export FRONTEND_PORT=12000
 export API_GATEWAY_PORT=12001
 export VITE_HOST=0.0.0.0
-export VITE_ALLOWED_HOSTS=work-1-icenfkwxmrkedzin.prod-runtime.all-hands.dev
+export VITE_ALLOWED_HOSTS=agentic.omics
 ```
 
 ## 🎯 Recommended Solution
 
-**For immediate external access**, I recommend **Option 4** - configuring the app for the runtime environment:
+**For immediate external access**, I recommend **Option 4** - configuring the app for custom domain:
 
 1. **Modify the startup script** to use ports 12000/12001
-2. **Update CORS configuration** to allow the external domains
+2. **Update CORS configuration** to allow the custom domains
 3. **Configure the frontend** to use the external API URL
 
 Would you like me to implement this solution?

@@ -43,12 +43,14 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Lombok -->
+        <!-- Lombok - Temporarily disabled due to Java 17.0.16 compatibility issues -->
+        <!--
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <scope>provided</scope>
         </dependency>
+        -->
 
         <!-- MapStruct -->
         <dependency>
