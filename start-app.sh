@@ -22,7 +22,7 @@ if [[ -n "$RUNTIME_ENV" || "$1" == "--external" ]]; then
     echo "========================================================"
     echo "🖥️  Runtime Environment: OpenHands"
     echo "🌐 External URLs will be enabled"
-    EXTERNAL_MODE=true
+    export EXTERNAL_MODE=true
     export SERVER_ADDRESS=0.0.0.0
     export FRONTEND_PORT=12000
     export API_GATEWAY_PORT=12001
