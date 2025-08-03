@@ -1,9 +1,12 @@
 # 🌍 External Access Fix
 
 ## Problem Solved
-**Issue**: Application was accessible from external networks on initial startup, but lost external access after restart.
+**Issue**: Application was accessible from external networks on initial startup, but lost external access after restart. When trying to access from external URLs, a "Bad Gateway" error was shown.
 
-**Root Cause**: The standard startup script (`start-app.sh`) was not configured to use the external runtime environment URLs and ports. When restarting the application, it would default to local-only access.
+**Root Cause**: 
+1. The standard startup script (`start-app.sh`) was not configured to use the external runtime environment URLs and ports. When restarting the application, it would default to local-only access.
+2. The API Gateway was not properly configured to handle CORS requests from external domains.
+3. The API Gateway routes were not using environment variables for service addresses.
 
 ## Solution Implemented ✅
 
@@ -23,6 +26,11 @@
 - Frontend Vite configuration is now dynamically generated with correct settings
 - CORS headers are properly set for external domains
 - All services bind to `0.0.0.0` when in external mode
+
+### 4. **API Gateway Configuration**
+- Updated API Gateway to use environment variables for service addresses
+- Enhanced CORS configuration to allow external domains
+- Added support for runtime environment URLs
 
 ## How to Use
 
@@ -53,10 +61,14 @@
 3. Automatic Vite configuration generation
 4. Proper CORS and host binding settings
 5. Enhanced diagnostics and testing
+6. API Gateway configuration with environment variables
+7. CORS configuration for external domains
 
 ### Files Modified
 - `start-app.sh` - Added external access support
 - `check-external-status.sh` - Enhanced diagnostics
+- `backend/api-gateway/src/main/resources/application.yml` - Updated API Gateway configuration
+- `backend/api-gateway/src/main/java/com/agenticomics/gateway/config/CorsConfig.java` - Enhanced CORS configuration
 - Created `EXTERNAL_ACCESS_FIX.md` - This documentation
 
 ## Troubleshooting
