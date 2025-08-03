@@ -10,7 +10,15 @@
 # This will display network URLs that others can use to access your app
 ```
 
-### Method 2: Check Network Status
+### Method 2: External Network Access (For Access Outside Local Network)
+```bash
+# Start the full application with external access enabled:
+./start-app-external.sh
+
+# This will display both local and public IP addresses and instructions for port forwarding
+```
+
+### Method 3: Check Network Status
 ```bash
 # Check if services are running and get network URLs:
 python3 setup-external-access.py info
@@ -19,7 +27,7 @@ python3 setup-external-access.py info
 python3 setup-external-access.py start
 ```
 
-### Method 3: SSH Port Forwarding (For Remote Access)
+### Method 4: SSH Port Forwarding (For Remote Access)
 ```bash
 # From your laptop terminal:
 ssh -L 3000:localhost:3000 username@your-server-ip
