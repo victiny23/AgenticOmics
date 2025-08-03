@@ -1,0 +1,11 @@
+#!/bin/bash
+echo "🧪 Testing External Access..."
+echo "================================"
+echo -n "Frontend (External): "
+curl -s -o /dev/null -w "%{http_code}" https://b664249479a7.ngrok-free.app && echo " ✅" || echo " ❌"
+echo -n "API Gateway (External): "
+curl -s -o /dev/null -w "%{http_code}" https://b664249479a7.ngrok-free.app/api && echo " ✅" || echo " ❌"
+echo -n "Frontend (Local): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:12000 && echo " ✅" || echo " ❌"
+echo -n "API Gateway (Local): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:12001 && echo " ✅" || echo " ❌"

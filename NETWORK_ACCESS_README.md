@@ -27,7 +27,21 @@ This will:
 - Show URLs that others can use to access your app
 - Include security warnings
 
-### 3. Check Network Status
+### 3. External Network Access (For Access Outside Local Network)
+```bash
+./start-app-external.sh
+```
+
+⚠️ **Security Warning**: This enables external access. Use with caution and proper firewall settings!
+
+This will:
+- Start all services bound to all interfaces (0.0.0.0)
+- Display both local and public IP addresses
+- Provide instructions for port forwarding to enable external access
+- Launch both backend and frontend services in a single command
+- Include security warnings and guidance
+
+### 4. Check Network Status
 ```bash
 python3 setup-external-access.py info
 ```
@@ -37,7 +51,7 @@ This will show:
 - Which services are running
 - Network URLs for sharing
 
-### 4. Share Access URLs
+### 5. Share Access URLs
 Once running, share these URLs with others on your network:
 - **Main Application**: `http://YOUR_IP:3000` (e.g., `http://192.168.1.100:3000`)
 - **API Gateway**: `http://YOUR_IP:8080`
