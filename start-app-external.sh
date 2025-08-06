@@ -1,0 +1,261 @@
+#!/bin/bash
+
+# AgenticOmics Platform External Access Startup Script
+# This script starts all services with external network access enabled
+
+set -e
+
+# Set JAVA_HOME if not already set
+if [ -z "$JAVA_HOME" ]; then
+    if [ -d "/usr/lib/jvm/java-17-openjdk-amd64" ]; then
+        export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+    elif [ -d "/usr/lib/jvm/java-17-openjdk" ]; then
+        export JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
+    elif [ -d "/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home" ]; then
+        export JAVA_HOME="/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home"
+    fi
+fi
+
+# Function to get local IP address for display purposes
+get_local_ip() {
+    if command -v hostname >/dev/null 2>&1; then
+        # Try hostname first (works in most environments)
+        hostname -I | awk '{print $1}' 2>/dev/null || echo "your-ip-address"
+    elif command -v ip >/dev/null 2>&1; then
+        # Linux
+        ip route get 8.8.8.8 | awk '{print $7; exit}' 2>/dev/null || echo "your-ip-address"
+    elif command -v ifconfig >/dev/null 2>&1; then
+        # macOS/BSD
+        ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1 || echo "your-ip-address"
+    else
+        echo "your-ip-address"
+    fi
+}
+
+# Function to get public IP address (if available)
+get_public_ip() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -s https://api.ipify.org || echo "unavailable"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- https://api.ipify.org || echo "unavailable"
+    else
+        echo "unavailable"
+    fi
+}
+
+# Use 0.0.0.0 for binding to all interfaces
+BIND_IP="0.0.0.0"
+# Get actual IP for display purposes
+LOCAL_IP=$(get_local_ip)
+PUBLIC_IP=$(get_public_ip)
+
+echo "🌍 Starting AgenticOmics Platform with External Access..."
+echo "========================================================"
+echo "🖥️  Local IP Address: $LOCAL_IP (binding to all interfaces)"
+echo "🌐 Public IP Address: $PUBLIC_IP (if accessible from internet)"
+echo "⚠️  Security Notice: Services will be accessible to external devices"
+echo "   Only use this on trusted networks with proper firewall settings"
+echo ""
+
+# Check if we're in the right directory
+if [ ! -f "run-services.sh" ]; then
+    echo "❌ Error: Please run this script from the AgenticOmics project root directory"
+    echo "   Current directory: $(pwd)"
+    echo "   Expected files: run-services.sh, backend/, frontend/"
+    exit 1
+fi
+
+# Function to check if a port is in use
+check_port() {
+    local port=$1
+    if command -v lsof >/dev/null 2>&1; then
+        if lsof -i :$port >/dev/null 2>&1; then
+            echo "⚠️  Port $port is already in use. Stopping existing processes..."
+            pkill -f "spring-boot:run" 2>/dev/null || true
+            pkill -f "npm start" 2>/dev/null || true
+            pkill -f "vite" 2>/dev/null || true
+            sleep 2
+        fi
+    fi
+}
+
+# Function to wait for service to start
+wait_for_service() {
+    local port=$1
+    local service_name=$2
+    local max_attempts=30
+    local attempt=1
+    
+    echo "⏳ Waiting for $service_name to start on port $port..."
+    
+    while [ $attempt -le $max_attempts ]; do
+        if command -v curl >/dev/null 2>&1; then
+            if curl -s http://localhost:$port >/dev/null 2>&1; then
+                echo "✅ $service_name is ready!"
+                return 0
+            fi
+        else
+            # Fallback: just wait a bit longer without curl
+            if [ $attempt -eq 10 ]; then
+                echo "✅ $service_name should be ready (curl not available for verification)"
+                return 0
+            fi
+        fi
+        
+        echo "   Attempt $attempt/$max_attempts - waiting..."
+        sleep 2
+        attempt=$((attempt + 1))
+    done
+    
+    echo "⚠️  $service_name may not be fully ready yet, but continuing..."
+    return 0
+}
+
+# Clean up any existing processes
+echo "🧹 Cleaning up any existing processes..."
+pkill -f "spring-boot:run" 2>/dev/null || true
+pkill -f "npm start" 2>/dev/null || true
+pkill -f "vite" 2>/dev/null || true
+sleep 2
+
+# Check required ports
+check_port 8080
+check_port 8081
+check_port 3000
+
+# Create logs directory
+mkdir -p logs
+
+# Step 1: Build backend (if needed)
+echo ""
+echo "🔨 Building backend services..."
+cd backend
+if [ ! -d "auth/target" ] || [ ! -d "api-gateway/target" ]; then
+    echo "   First time setup - building all modules..."
+    mvn clean install -DskipTests -q
+    echo "✅ Backend build completed!"
+else
+    echo "✅ Backend already built (skipping)"
+fi
+cd ..
+
+# Step 2: Start API Gateway with external access
+echo ""
+echo "🌐 Starting API Gateway (port 8080) with external access..."
+export SERVER_ADDRESS="$BIND_IP"
+export NETWORK_MODE="enabled"
+./run-services.sh gateway > logs/gateway.log 2>&1 &
+GATEWAY_PID=$!
+
+# Step 3: Start Authentication Service with external access
+echo "🔐 Starting Authentication Service (port 8081) with external access..."
+export SERVER_ADDRESS="$BIND_IP"
+export NETWORK_MODE="enabled"
+./run-services.sh auth > logs/auth.log 2>&1 &
+AUTH_PID=$!
+
+# Wait for backend services
+wait_for_service 8080 "API Gateway"
+wait_for_service 8081 "Authentication Service"
+
+# Step 4: Start Frontend with external access
+echo ""
+echo "🎨 Starting Frontend Application with External Access (port 3000)..."
+cd frontend
+
+# Install dependencies if needed
+if [ ! -d "node_modules" ]; then
+    echo "   Installing frontend dependencies..."
+    npm install --silent
+fi
+
+# Start the frontend with external access
+echo "   Starting React development server with external access..."
+export VITE_HOST="$BIND_IP"
+export VITE_API_TARGET="http://$BIND_IP:8080"
+npm run dev > ../logs/frontend.log 2>&1 &
+FRONTEND_PID=$!
+cd ..
+
+# Wait for frontend
+wait_for_service 3000 "Frontend Application"
+
+# Create PID file for cleanup
+echo "$GATEWAY_PID $AUTH_PID $FRONTEND_PID" > logs/app-pids.txt
+
+# Setup port forwarding information
+echo ""
+echo "🔄 Setting up port forwarding information..."
+echo "To enable external access beyond your local network, you need to:"
+echo "1. Configure your router to forward ports 3000, 8080, and 8081 to your local IP ($LOCAL_IP)"
+echo "2. Ensure your firewall allows incoming connections on these ports"
+echo "3. Use a service like ngrok or localtunnel for temporary public URLs without router configuration"
+
+echo ""
+echo "🎉 AgenticOmics Platform Started Successfully with External Access!"
+echo "=================================================================="
+echo ""
+echo "📱 Access the application:"
+echo "   🏠 Local Access:"
+echo "      • Main Application: http://localhost:3000"
+echo "      • API Gateway:      http://localhost:8080"
+echo "      • Auth Service:     http://localhost:8081"
+echo ""
+echo "   🌐 Network Access (from other devices on same network):"
+echo "      • Main Application: http://$LOCAL_IP:3000"
+echo "      • API Gateway:      http://$LOCAL_IP:8080"
+echo "      • Auth Service:     http://$LOCAL_IP:8081"
+echo ""
+echo "   🌍 External Access (if port forwarding is configured):"
+echo "      • Main Application: http://$PUBLIC_IP:3000"
+echo "      • API Gateway:      http://$PUBLIC_IP:8080"
+echo "      • Auth Service:     http://$PUBLIC_IP:8081"
+echo ""
+echo "📋 Service Status:"
+echo "   ✅ API Gateway running (PID: $GATEWAY_PID)"
+echo "   ✅ Authentication Service running (PID: $AUTH_PID)"
+echo "   ✅ Frontend Application running (PID: $FRONTEND_PID)"
+echo ""
+echo "📁 Logs available in:"
+echo "   - logs/gateway.log"
+echo "   - logs/auth.log"
+echo "   - logs/frontend.log"
+echo ""
+echo "🔗 Share these URLs with others:"
+echo "   📱 Mobile/Tablet on same network: http://$LOCAL_IP:3000"
+echo "   💻 Other Laptops on same network: http://$LOCAL_IP:3000"
+echo "   🌍 External devices (if port forwarding configured): http://$PUBLIC_IP:3000"
+echo ""
+echo "🛑 To stop all services:"
+echo "   ./stop-app.sh"
+echo "   or press Ctrl+C in this terminal"
+echo ""
+
+# Keep the script running and handle Ctrl+C
+cleanup() {
+    echo ""
+    echo "🛑 Stopping AgenticOmics Platform..."
+    
+    if [ -f "logs/app-pids.txt" ]; then
+        PIDS=$(cat logs/app-pids.txt)
+        for pid in $PIDS; do
+            kill $pid 2>/dev/null || true
+        done
+        rm -f logs/app-pids.txt
+    fi
+    
+    pkill -f "spring-boot:run" 2>/dev/null || true
+    pkill -f "npm start" 2>/dev/null || true
+    pkill -f "vite" 2>/dev/null || true
+    
+    echo "✅ All services stopped"
+    exit 0
+}
+
+trap cleanup INT TERM
+
+# Wait for user to stop
+echo "Press Ctrl+C to stop all services..."
+while true; do
+    sleep 1
+done
