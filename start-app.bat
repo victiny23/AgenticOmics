@@ -73,7 +73,7 @@ if not exist "node_modules" (
 
 REM Start the frontend
 echo    Starting React development server...
-start "Frontend" /min cmd /c "npm start > ..\logs\frontend.log 2>&1"
+start "Frontend" /min cmd /c "npm run dev > ..\logs\frontend.log 2>&1"
 cd ..
 
 REM Wait for frontend
