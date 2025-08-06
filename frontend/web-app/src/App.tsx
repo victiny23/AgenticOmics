@@ -8,6 +8,7 @@ import EDAPage from './pages/EDAPage'
 import ModelPage from './pages/ModelPage'
 import PipelinePage from './pages/PipelinePage'
 import ResultPage from './pages/ResultPage'
+import LoginPage from './pages/LoginPage'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/model" element={<ModelPage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/result" element={<ResultPage />} />
+          <Route path="/login" element={<LoginPage />} />
         </Routes>
       </Layout>
     </Box>
