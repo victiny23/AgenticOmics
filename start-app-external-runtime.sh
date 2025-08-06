@@ -5,12 +5,41 @@
 
 set -e
 
+# IP detection functions
+get_local_ip() {
+    if command -v hostname >/dev/null 2>&1; then
+        hostname -I | awk '{print $1}' 2>/dev/null || echo "your-ip-address"
+    elif command -v ip >/dev/null 2>&1; then
+        ip route get 8.8.8.8 | awk '{print $7; exit}' 2>/dev/null || echo "your-ip-address"
+    elif command -v ifconfig >/dev/null 2>&1; then
+        ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1 || echo "your-ip-address"
+    else
+        echo "your-ip-address"
+    fi
+}
+
+get_public_ip() {
+    if [ -n "$EXTERNAL_URL" ]; then
+        echo "$EXTERNAL_URL"
+    elif command -v curl >/dev/null 2>&1; then
+        curl -s https://api.ipify.org || echo "unavailable"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- https://api.ipify.org || echo "unavailable"
+    else
+        echo "unavailable"
+    fi
+}
+
+# Detect IPs early
+LOCAL_IP=$(get_local_ip)
+PUBLIC_IP=$(get_public_ip)
+
 echo "🌍 Starting AgenticOmics Platform for External Runtime Access..."
 echo "========================================================"
 echo "🖥️  Runtime Environment: OpenHands"
-echo "🌐 External URLs:"
-echo "   • Main App: https://work-1-bwktzeajbmgslino.prod-runtime.all-hands.dev"
-echo "   • API Gateway: https://work-2-bwktzeajbmgslino.prod-runtime.all-hands.dev"
+echo "🌐 Detected IPs:"
+echo "   • Local IP: $LOCAL_IP"
+echo "   • Public IP: $PUBLIC_IP"
 echo "⚠️  Security Notice: Services will be accessible from the internet"
 echo
 
@@ -128,34 +157,38 @@ done
 echo
 echo "🎉 AgenticOmics Platform Started Successfully with External Runtime Access!"
 echo "=================================================================="
-echo
+echo ""
 echo "📱 Access the application:"
-echo "   🌍 External Access (from anywhere on the internet):"
-echo "      • Main Application: https://work-1-bwktzeajbmgslino.prod-runtime.all-hands.dev"
-echo "      • API Gateway:      https://work-2-bwktzeajbmgslino.prod-runtime.all-hands.dev"
-echo
-echo "   🏠 Local Access (for testing):"
+echo "   🏠 Local Access:"
 echo "      • Main Application: http://localhost:$FRONTEND_PORT"
 echo "      • API Gateway:      http://localhost:$API_GATEWAY_PORT"
 echo "      • Auth Service:     http://localhost:$AUTH_PORT"
-echo
-echo "📋 Service Status:"
-echo "   ✅ API Gateway running (PID: $GATEWAY_PID)"
-echo "   ✅ Authentication Service running (PID: $AUTH_PID)"
-echo "   ✅ Frontend Application running (PID: $FRONTEND_PID)"
-echo
+echo ""
+echo "   🌐 Network Access (from other devices on same network):"
+echo "      • Main Application: http://$LOCAL_IP:$FRONTEND_PORT"
+echo "      • API Gateway:      http://$LOCAL_IP:$API_GATEWAY_PORT"
+echo "      • Auth Service:     http://$LOCAL_IP:$AUTH_PORT"
+echo ""
+echo "   🌍 External Access (if port forwarding or tunnel is configured):"
+echo "      • Main Application: http://$PUBLIC_IP:$FRONTEND_PORT"
+echo "      • API Gateway:      http://$PUBLIC_IP:$API_GATEWAY_PORT"
+echo "      • Auth Service:     http://$PUBLIC_IP:$AUTH_PORT"
+echo ""
+echo "🔗 Share these URLs with others:"
+echo "   📱 Mobile/Tablet on same network: http://$LOCAL_IP:$FRONTEND_PORT"
+echo "   💻 Other Laptops on same network: http://$LOCAL_IP:$FRONTEND_PORT"
+echo "   🌍 External devices (if port forwarding/tunnel configured): http://$PUBLIC_IP:$FRONTEND_PORT"
+echo ""
 echo "📁 Logs available in:"
 echo "   - logs/gateway.log"
 echo "   - logs/auth.log"
 echo "   - logs/frontend.log"
-echo
-echo "🔗 Share this URL with others:"
-echo "   🌍 https://work-1-bwktzeajbmgslino.prod-runtime.all-hands.dev"
-echo
+echo ""
 echo "🛑 To stop all services:"
 echo "   ./stop-app.sh"
 echo "   or press Ctrl+C in this terminal"
-echo
+echo ""
+echo "Press Ctrl+C to stop all services..."
 
 # Create a simple status check script
 cat > check-external-status.sh << 'EOF'
@@ -179,7 +212,6 @@ echo
 # Keep the script running and handle Ctrl+C
 trap 'echo "🛑 Stopping AgenticOmics Platform..."; ./stop-app.sh; echo "✅ All services stopped"; exit 0' INT
 
-echo "Press Ctrl+C to stop all services..."
 while true; do
     sleep 1
 done

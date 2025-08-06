@@ -87,6 +87,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const navigate = useNavigate()
   const location = useLocation()
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
@@ -104,6 +105,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate(path)
     setMobileOpen(false)
   }
+
+  const handleLogin = () => {
+    handleProfileMenuClose();
+    navigate('/login');
+  };
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    handleProfileMenuClose();
+    // Optionally clear cookies/session here
+  };
 
   const drawer = (
     <Box>
@@ -275,15 +286,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Profile Menu */}
       <Menu
         anchorEl={anchorEl}
-        anchorOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
-        }}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
         keepMounted
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
-        }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         open={Boolean(anchorEl)}
         onClose={handleProfileMenuClose}
       >
@@ -293,12 +298,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </ListItemIcon>
           Settings
         </MenuItem>
-        <MenuItem onClick={handleProfileMenuClose}>
-          <ListItemIcon>
-            <Logout fontSize="small" />
-          </ListItemIcon>
-          Logout
-        </MenuItem>
+        {isLoggedIn ? (
+          <MenuItem onClick={handleLogout}>
+            <ListItemIcon>
+              <Logout fontSize="small" />
+            </ListItemIcon>
+            Logout
+          </MenuItem>
+        ) : (
+          <MenuItem onClick={handleLogin}>
+            <ListItemIcon>
+              <AccountCircle fontSize="small" />
+            </ListItemIcon>
+            Login
+          </MenuItem>
+        )}
       </Menu>
 
       {/* Drawer */}
