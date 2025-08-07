@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Box, Button, TextField, Typography, Alert, Link, Container, Paper } from '@mui/material';
+import { Box, Button, TextField, Typography, Alert, Link, Container, Paper, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { Science } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,23 +14,34 @@ const LoginPage: React.FC = () => {
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [isResetPassword, setIsResetPassword] = useState(false);
   const [email, setEmail] = useState('');
-  const [telephoneReg, setTelephoneReg] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [success, setSuccess] = useState('');
-  const [resetToken, setResetToken] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [loginMethod, setLoginMethod] = useState<'username' | 'telephone'>('username');
+                const [telephoneReg, setTelephoneReg] = useState('');
+              const [confirmPassword, setConfirmPassword] = useState('');
+              const [success, setSuccess] = useState('');
+              const [resetToken, setResetToken] = useState('');
+              const [newPassword, setNewPassword] = useState('');
+              const [confirmNewPassword, setConfirmNewPassword] = useState('');
+              const [loginMethod, setLoginMethod] = useState<'username' | 'telephone'>('username');
+              const [role, setRole] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+                const { login } = useAuth();
 
-  // Check if we should show register form based on navigation state
-  useEffect(() => {
-    if (location.state?.showRegister) {
-      setIsRegister(true);
-    }
-  }, [location.state]);
+              // Role options
+              const roleOptions = [
+                'Lab PI',
+                'Master Student', 
+                'PhD Student',
+                'Data Analyst',
+                'Technician',
+                'Professor'
+              ];
+
+              // Check if we should show register form based on navigation state
+              useEffect(() => {
+                if (location.state?.showRegister) {
+                  setIsRegister(true);
+                }
+              }, [location.state]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,10 +52,10 @@ const LoginPage: React.FC = () => {
         ...(loginMethod === 'username' ? { username } : { telephone })
       };
       
-      const response = await axios.post('http://localhost:12001/api/auth/login', loginData);
-      
-      // Use auth context to login
-      login(response.data.token, response.data.username);
+                        const response = await axios.post('http://localhost:12001/api/auth/login', loginData);
+
+                  // Use auth context to login
+                  login(response.data.token, response.data.username, response.data.role);
       
       navigate('/welcome');
     } catch (err: any) {
@@ -52,32 +63,38 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-    try {
-      await axios.post('http://localhost:12001/api/auth/register', {
-        username,
-        password,
-        email,
-        telephone: telephoneReg,
-      });
-      setSuccess('Registration successful! You can now log in.');
-      setIsRegister(false);
-      setUsername('');
-      setPassword('');
-      setConfirmPassword('');
-      setEmail('');
-      setTelephoneReg('');
-    } catch (err: any) {
-      setError('Registration failed. Please try again.');
-    }
-  };
+                const handleRegister = async (e: React.FormEvent) => {
+                e.preventDefault();
+                setError('');
+                setSuccess('');
+                if (password !== confirmPassword) {
+                  setError('Passwords do not match.');
+                  return;
+                }
+                if (!role) {
+                  setError('Please select a role.');
+                  return;
+                }
+                try {
+                  await axios.post('http://localhost:12001/api/auth/register', {
+                    username,
+                    password,
+                    email,
+                    telephone: telephoneReg,
+                    role,
+                  });
+                  setSuccess('Registration successful! You can now log in.');
+                  setIsRegister(false);
+                  setUsername('');
+                  setPassword('');
+                  setConfirmPassword('');
+                  setEmail('');
+                  setTelephoneReg('');
+                  setRole('');
+                } catch (err: any) {
+                  setError('Registration failed. Please try again.');
+                }
+              };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -272,23 +289,37 @@ const LoginPage: React.FC = () => {
                 required
                 type="email"
               />
-              <TextField
-                label="Phone Number (Optional)"
-                value={telephoneReg}
-                onChange={e => setTelephoneReg(e.target.value)}
-                fullWidth
-                margin="normal"
-                placeholder="+1234567890"
-              />
-              <TextField
-                label="Password"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                fullWidth
-                margin="normal"
-                required
-              />
+                                        <TextField
+                            label="Phone Number (Optional)"
+                            value={telephoneReg}
+                            onChange={e => setTelephoneReg(e.target.value)}
+                            fullWidth
+                            margin="normal"
+                            placeholder="+1234567890"
+                          />
+                          <FormControl fullWidth margin="normal" required>
+                            <InputLabel>Role</InputLabel>
+                            <Select
+                              value={role}
+                              label="Role"
+                              onChange={(e) => setRole(e.target.value)}
+                            >
+                              {roleOptions.map((roleOption) => (
+                                <MenuItem key={roleOption} value={roleOption}>
+                                  {roleOption}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <TextField
+                            label="Password"
+                            type="password"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            fullWidth
+                            margin="normal"
+                            required
+                          />
               <TextField
                 label="Confirm Password"
                 type="password"

@@ -34,7 +34,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const { username } = useAuth();
+              const { username, role } = useAuth();
 
   const features = [
     {
@@ -97,9 +97,12 @@ const DashboardPage: React.FC = () => {
         >
           <Grid container spacing={4} alignItems="center">
             <Grid item xs={12} md={8}>
-              <Typography variant="h2" gutterBottom sx={{ fontWeight: 600 }}>
-                Welcome back, {username}! 👋
-              </Typography>
+                                        <Typography variant="h2" gutterBottom sx={{ fontWeight: 600 }}>
+                            Welcome back, {username}! 👋
+                          </Typography>
+                          <Typography variant="h6" sx={{ mb: 2, opacity: 0.9 }}>
+                            {role}
+                          </Typography>
               <Typography variant="h5" sx={{ mb: 3, opacity: 0.9 }}>
                 Ready to continue your omics analysis journey?
               </Typography>

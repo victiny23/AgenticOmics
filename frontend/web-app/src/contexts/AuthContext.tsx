@@ -3,7 +3,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 interface AuthContextType {
   isAuthenticated: boolean;
   username: string | null;
-  login: (token: string, username: string) => void;
+  role: string | null;
+  login: (token: string, username: string, role: string) => void;
   logout: () => void;
 }
 
@@ -24,15 +25,18 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
 
-  // Check for existing authentication on app load
+    // Check for existing authentication on app load
   useEffect(() => {
     const token = localStorage.getItem('jwtToken');
     const storedUsername = localStorage.getItem('username');
-    
+    const storedRole = localStorage.getItem('role');
+
     if (token && storedUsername) {
       setIsAuthenticated(true);
       setUsername(storedUsername);
+      setRole(storedRole);
     }
   }, []);
 
@@ -62,24 +66,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const login = (token: string, username: string) => {
+  const login = (token: string, username: string, role: string) => {
     localStorage.setItem('jwtToken', token);
     localStorage.setItem('username', username);
+    localStorage.setItem('role', role);
     setIsAuthenticated(true);
     setUsername(username);
+    setRole(role);
   };
 
   const logout = () => {
     localStorage.removeItem('jwtToken');
     localStorage.removeItem('username');
+    localStorage.removeItem('role');
     setIsAuthenticated(false);
     setUsername(null);
+    setRole(null);
     window.dispatchEvent(new CustomEvent('logout'));
   };
 
   const value = {
     isAuthenticated,
     username,
+    role,
     login,
     logout,
   };

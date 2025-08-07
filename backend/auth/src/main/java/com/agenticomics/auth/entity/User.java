@@ -30,6 +30,9 @@ public class User {
     @Column(name = "telephone", unique = true)
     private String telephone;
     
+    @Column(name = "role")
+    private String role;
+    
     @Column(name = "reset_token")
     private String resetToken;
     

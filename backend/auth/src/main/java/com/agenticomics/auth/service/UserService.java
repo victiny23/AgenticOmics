@@ -19,7 +19,7 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
     
-    public User registerUser(String username, String password, String email, String telephone) {
+    public User registerUser(String username, String password, String email, String telephone, String role) {
         // Check if user already exists
         if (userRepository.existsByUsername(username)) {
             throw new RuntimeException("Username already exists");
@@ -39,6 +39,7 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(password));
         user.setEmail(email);
         user.setTelephone(telephone);
+        user.setRole(role);
         user.setIsActive(true);
         
         return userRepository.save(user);
