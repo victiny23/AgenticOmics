@@ -30,6 +30,7 @@ public class DataInitializer implements CommandLineRunner {
         admin.setUsername("admin");
         admin.setPassword(passwordEncoder.encode("admin123"));
         admin.setEmail("admin@agenticomics.com");
+        admin.setTelephone("+1234567890");
         admin.setIsActive(true);
         userRepository.save(admin);
 
@@ -38,11 +39,12 @@ public class DataInitializer implements CommandLineRunner {
         demo.setUsername("demo");
         demo.setPassword(passwordEncoder.encode("demo123"));
         demo.setEmail("demo@agenticomics.com");
+        demo.setTelephone("+1987654321");
         demo.setIsActive(true);
         userRepository.save(demo);
 
         System.out.println("Sample users created:");
-        System.out.println("- admin/admin123");
-        System.out.println("- demo/demo123");
+        System.out.println("- admin/admin123 (tel: +1234567890)");
+        System.out.println("- demo/demo123 (tel: +1987654321)");
     }
 } 

@@ -1,87 +1,48 @@
-import React from 'react'
-import { useNavigate } from 'react-router-dom'
-import {
-  Box,
-  Typography,
+import React from 'react';
+import { 
+  Box, 
+  Typography, 
+  Button, 
+  Container, 
+  Paper,
+  Grid,
   Card,
   CardContent,
   CardActions,
-  Button,
-  Grid,
-  Container,
-  Paper,
   Chip,
   Avatar,
   List,
   ListItem,
   ListItemIcon,
-  ListItemText,
-} from '@mui/material'
-import {
-  Analytics,
-  AccountTree,
-  Assessment,
-  CloudUpload,
-  AutoAwesome,
-  Speed,
+  ListItemText
+} from '@mui/material';
+import { 
+  Science, 
+  Psychology, 
+  Analytics, 
   Security,
-  CheckCircle,
-  TrendingUp,
-  Psychology,
+  Login,
+  PersonAdd,
   Biotech,
-} from '@mui/icons-material'
+  Speed,
+  CheckCircle,
+  AutoAwesome
+} from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 
 const WelcomePage: React.FC = () => {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
-  const features = [
-    {
-      icon: <CloudUpload sx={{ fontSize: 40, color: '#1976d2' }} />,
-      title: 'Smart Data Upload',
-      description: 'Drag and drop your omics data files with automatic format detection and validation.',
-      action: () => navigate('/data'),
-      buttonText: 'Upload Data',
-    },
-    {
-      icon: <Analytics sx={{ fontSize: 40, color: '#9c27b0' }} />,
-      title: 'Exploratory Analysis',
-      description: 'Interactive visualizations and statistical analysis to understand your data.',
-      action: () => navigate('/eda'),
-      buttonText: 'Explore Data',
-    },
-    {
-      icon: <AccountTree sx={{ fontSize: 40, color: '#f57c00' }} />,
-      title: 'AI Pipeline Builder',
-      description: 'Create analysis workflows with drag-and-drop interface and AI recommendations.',
-      action: () => navigate('/pipeline'),
-      buttonText: 'Build Pipeline',
-    },
-    {
-      icon: <Assessment sx={{ fontSize: 40, color: '#388e3c' }} />,
-      title: 'Results & Insights',
-      description: 'View, interpret, and export your analysis results with AI-generated insights.',
-      action: () => navigate('/result'),
-      buttonText: 'View Results',
-    },
-  ]
+  const handleLogin = () => {
+    navigate('/login');
+  };
 
-  const capabilities = [
-    'Multi-omics data support (Genomics, Transcriptomics, Proteomics)',
-    'Standard file formats (FASTQ, BAM, VCF, CSV, H5AD)',
-    'AI-powered analysis recommendations',
-    'Interactive data visualizations',
-    'Automated quality control',
-    'Reproducible analysis workflows',
-  ]
-
-  const recentActivity = [
-    { action: 'Data uploaded', file: 'RNA_seq_sample_01.fastq', time: '2 hours ago' },
-    { action: 'Pipeline completed', name: 'Differential Expression Analysis', time: '1 day ago' },
-    { action: 'Results exported', format: 'PDF Report', time: '2 days ago' },
-  ]
+  const handleRegister = () => {
+    navigate('/login', { state: { showRegister: true } });
+  };
 
   return (
-    <Container maxWidth="xl">
+    <Container maxWidth="xl" sx={{ py: 3 }}>
       {/* Hero Section */}
       <Box sx={{ mb: 6 }}>
         <Paper
@@ -90,15 +51,70 @@ const WelcomePage: React.FC = () => {
             background: 'linear-gradient(135deg, #1976d2 0%, #9c27b0 100%)',
             color: 'white',
             borderRadius: 3,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
           }}
         >
           <Grid container spacing={4} alignItems="center">
             <Grid item xs={12} md={8}>
-              <Typography variant="h2" gutterBottom sx={{ fontWeight: 600 }}>
-                Welcome to AgenticOmics
-              </Typography>
+              {/* Logo and Title */}
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                <Box
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    marginRight: 3,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative'
+                  }}
+                >
+                  <img 
+                    src="/logo.png" 
+                    alt="AgenticOmics Logo" 
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                      filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
+                    }}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const fallback = target.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
+                  />
+                  {/* Fallback Logo */}
+                  <Box
+                    sx={{
+                      width: '100%',
+                      height: '100%',
+                      background: 'radial-gradient(circle at 30% 70%, #00d4ff 0%, #00ff88 100%)',
+                      borderRadius: '50%',
+                      display: 'none',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0
+                    }}
+                  >
+                    <Science sx={{ fontSize: 40, color: 'white' }} />
+                  </Box>
+                </Box>
+                <Box>
+                  <Typography variant="h2" gutterBottom sx={{ fontWeight: 600 }}>
+                    AgenticOmics
+                  </Typography>
+                  <Typography variant="h5" sx={{ opacity: 0.9 }}>
+                    AI-Powered Omics Analysis Platform
+                  </Typography>
+                </Box>
+              </Box>
+              
               <Typography variant="h5" sx={{ mb: 3, opacity: 0.9 }}>
-                AI-Powered Omics Data Analysis Platform
+                Welcome to the Future of Biological Data Analysis
               </Typography>
               <Typography variant="body1" sx={{ mb: 3, fontSize: '1.1rem', opacity: 0.8 }}>
                 Transform your experimental data into meaningful insights with our intuitive, 
@@ -147,55 +163,128 @@ const WelcomePage: React.FC = () => {
         </Paper>
       </Box>
 
-      {/* Quick Actions */}
+      {/* Platform Features */}
       <Box sx={{ mb: 6 }}>
         <Typography variant="h4" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-          Get Started
+          Platform Features
         </Typography>
         <Grid container spacing={3}>
-          {features.map((feature, index) => (
-            <Grid item xs={12} sm={6} md={3} key={index}>
-              <Card
-                sx={{
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  transition: 'transform 0.2s, box-shadow 0.2s',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
-                  },
-                }}
-              >
-                <CardContent sx={{ flexGrow: 1, textAlign: 'center', p: 3 }}>
-                  <Box sx={{ mb: 2 }}>
-                    {feature.icon}
-                  </Box>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                    {feature.title}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {feature.description}
-                  </Typography>
-                </CardContent>
-                <CardActions sx={{ justifyContent: 'center', pb: 2 }}>
-                  <Button
-                    variant="contained"
-                    onClick={feature.action}
-                    sx={{ borderRadius: 2 }}
-                  >
-                    {feature.buttonText}
-                  </Button>
-                </CardActions>
-              </Card>
-            </Grid>
-          ))}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, textAlign: 'center', p: 3 }}>
+                <Box sx={{ mb: 2 }}>
+                  <Analytics sx={{ fontSize: 40, color: '#1976d2' }} />
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                  Advanced Analytics
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Leverage cutting-edge AI algorithms for comprehensive omics data analysis, 
+                  pattern recognition, and predictive modeling.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, textAlign: 'center', p: 3 }}>
+                <Box sx={{ mb: 2 }}>
+                  <Psychology sx={{ fontSize: 40, color: '#9c27b0' }} />
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                  Intelligent Insights
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Discover hidden patterns and correlations in your biological data 
+                  through sophisticated machine learning and statistical analysis.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, textAlign: 'center', p: 3 }}>
+                <Box sx={{ mb: 2 }}>
+                  <Security sx={{ fontSize: 40, color: '#f57c00' }} />
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                  Secure & Reliable
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Enterprise-grade security with encrypted data transmission, 
+                  secure authentication, and comprehensive audit trails.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, textAlign: 'center', p: 3 }}>
+                <Box sx={{ mb: 2 }}>
+                  <Speed sx={{ fontSize: 40, color: '#388e3c' }} />
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                  Fast & Efficient
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Optimized performance with parallel processing and cloud-native 
+                  architecture for lightning-fast analysis results.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
       </Box>
 
-      {/* Platform Capabilities and Recent Activity */}
-      <Grid container spacing={4}>
-        {/* Platform Capabilities */}
+      {/* Platform Capabilities */}
+      <Grid container spacing={4} sx={{ mb: 6 }}>
         <Grid item xs={12} md={8}>
           <Card sx={{ height: '100%' }}>
             <CardContent sx={{ p: 3 }}>
@@ -203,47 +292,114 @@ const WelcomePage: React.FC = () => {
                 Platform Capabilities
               </Typography>
               <List>
-                {capabilities.map((capability, index) => (
-                  <ListItem key={index} sx={{ py: 1 }}>
-                    <ListItemIcon>
-                      <CheckCircle sx={{ color: '#4caf50' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={capability}
-                      primaryTypographyProps={{ variant: 'body1' }}
-                    />
-                  </ListItem>
-                ))}
+                <ListItem sx={{ py: 1 }}>
+                  <ListItemIcon>
+                    <CheckCircle sx={{ color: '#4caf50' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Multi-omics data support (Genomics, Transcriptomics, Proteomics)"
+                    primaryTypographyProps={{ variant: 'body1' }}
+                  />
+                </ListItem>
+                <ListItem sx={{ py: 1 }}>
+                  <ListItemIcon>
+                    <CheckCircle sx={{ color: '#4caf50' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Standard file formats (FASTQ, BAM, VCF, CSV, H5AD)"
+                    primaryTypographyProps={{ variant: 'body1' }}
+                  />
+                </ListItem>
+                <ListItem sx={{ py: 1 }}>
+                  <ListItemIcon>
+                    <CheckCircle sx={{ color: '#4caf50' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="AI-powered analysis recommendations"
+                    primaryTypographyProps={{ variant: 'body1' }}
+                  />
+                </ListItem>
+                <ListItem sx={{ py: 1 }}>
+                  <ListItemIcon>
+                    <CheckCircle sx={{ color: '#4caf50' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Interactive data visualizations"
+                    primaryTypographyProps={{ variant: 'body1' }}
+                  />
+                </ListItem>
+                <ListItem sx={{ py: 1 }}>
+                  <ListItemIcon>
+                    <CheckCircle sx={{ color: '#4caf50' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Automated quality control"
+                    primaryTypographyProps={{ variant: 'body1' }}
+                  />
+                </ListItem>
+                <ListItem sx={{ py: 1 }}>
+                  <ListItemIcon>
+                    <CheckCircle sx={{ color: '#4caf50' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Reproducible analysis workflows"
+                    primaryTypographyProps={{ variant: 'body1' }}
+                  />
+                </ListItem>
               </List>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Recent Activity */}
+        {/* Call to Action */}
         <Grid item xs={12} md={4}>
           <Card sx={{ height: '100%' }}>
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
-                Recent Activity
+                Get Started Today
               </Typography>
-              <List>
-                {recentActivity.map((activity, index) => (
-                  <ListItem key={index} sx={{ py: 1, px: 0 }}>
-                    <ListItemIcon>
-                      <TrendingUp sx={{ color: '#1976d2' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={activity.action}
-                      secondary={`${activity.file || activity.name || activity.format} • ${activity.time}`}
-                      primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
-                      secondaryTypographyProps={{ variant: 'caption' }}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-              <Box sx={{ mt: 2, textAlign: 'center' }}>
-                <Button variant="outlined" size="small">
-                  View All Activity
+              <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
+                Join thousands of researchers who are already using AgenticOmics to accelerate 
+                their discoveries and unlock new insights.
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  startIcon={<Login />}
+                  onClick={handleLogin}
+                  sx={{
+                    background: 'linear-gradient(45deg, #1976d2 30%, #9c27b0 100%)',
+                    color: 'white',
+                    py: 1.5,
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    '&:hover': {
+                      background: 'linear-gradient(45deg, #9c27b0 30%, #1976d2 100%)',
+                    }
+                  }}
+                >
+                  Sign In
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  size="large"
+                  startIcon={<PersonAdd />}
+                  onClick={handleRegister}
+                  sx={{
+                    borderColor: '#1976d2',
+                    color: '#1976d2',
+                    py: 1.5,
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    '&:hover': {
+                      borderColor: '#9c27b0',
+                      backgroundColor: 'rgba(156, 39, 176, 0.04)',
+                    }
+                  }}
+                >
+                  Create Account
                 </Button>
               </Box>
             </CardContent>
@@ -255,7 +411,7 @@ const WelcomePage: React.FC = () => {
       <Box sx={{ mt: 6 }}>
         <Paper sx={{ p: 3, backgroundColor: '#f8f9fa', borderRadius: 2 }}>
           <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-            💡 Quick Tips
+            💡 Why Choose AgenticOmics?
           </Typography>
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
@@ -280,7 +436,7 @@ const WelcomePage: React.FC = () => {
         </Paper>
       </Box>
     </Container>
-  )
-}
+  );
+};
 
-export default WelcomePage
+export default WelcomePage;
