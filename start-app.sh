@@ -279,9 +279,20 @@ else
     echo "=============================================="
     echo ""
     echo "📱 Access the application:"
-    echo "   🌐 Main Application: http://localhost:3000"
-    echo "   🔧 API Gateway:      http://localhost:8080"
-    echo "   🔐 Auth Service:     http://localhost:8081"
+    echo "   🏠 Local Access:
+      • Main Application (Frontend): http://localhost:$FRONTEND_PORT
+      • H2 Database Console:        http://localhost:$AUTH_PORT/h2-console
+   🔧 Backend Services (for developers):
+      • API Gateway:      http://localhost:$API_GATEWAY_PORT
+      • Auth Service:     http://localhost:$AUTH_PORT
+   🌐 Network Access (from other devices on same network):
+      • Main Application: http://$LOCAL_IP:$FRONTEND_PORT
+   🌍 External Access (if port forwarding or tunnel is configured):
+      • Main Application: http://$PUBLIC_IP:$FRONTEND_PORT
+🔗 Share these URLs with others:
+   📱 Mobile/Tablet on same network: http://$LOCAL_IP:$FRONTEND_PORT
+   💻 Other Laptops on same network: http://$LOCAL_IP:$FRONTEND_PORT
+   🌍 External devices (if port forwarding/tunnel configured): http://$PUBLIC_IP:$FRONTEND_PORT"
     echo ""
     echo "🛑 To stop all services:"
     echo "   ./stop-app.sh"

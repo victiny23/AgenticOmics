@@ -156,28 +156,22 @@ done
 
 echo
 echo "🎉 AgenticOmics Platform Started Successfully with External Runtime Access!"
-echo "=================================================================="
-echo ""
-echo "📱 Access the application:"
-echo "   🏠 Local Access:"
-echo "      • Main Application: http://localhost:$FRONTEND_PORT"
-echo "      • API Gateway:      http://localhost:$API_GATEWAY_PORT"
-echo "      • Auth Service:     http://localhost:$AUTH_PORT"
-echo ""
-echo "   🌐 Network Access (from other devices on same network):"
-echo "      • Main Application: http://$LOCAL_IP:$FRONTEND_PORT"
-echo "      • API Gateway:      http://$LOCAL_IP:$API_GATEWAY_PORT"
-echo "      • Auth Service:     http://$LOCAL_IP:$AUTH_PORT"
-echo ""
-echo "   🌍 External Access (if port forwarding or tunnel is configured):"
-echo "      • Main Application: http://$PUBLIC_IP:$FRONTEND_PORT"
-echo "      • API Gateway:      http://$PUBLIC_IP:$API_GATEWAY_PORT"
-echo "      • Auth Service:     http://$PUBLIC_IP:$AUTH_PORT"
-echo ""
-echo "🔗 Share these URLs with others:"
-echo "   📱 Mobile/Tablet on same network: http://$LOCAL_IP:$FRONTEND_PORT"
-echo "   💻 Other Laptops on same network: http://$LOCAL_IP:$FRONTEND_PORT"
-echo "   🌍 External devices (if port forwarding/tunnel configured): http://$PUBLIC_IP:$FRONTEND_PORT"
+==================================================================
+📱 Access the application:
+   🏠 Local Access:
+      • Main Application (Frontend): http://localhost:12000
+      • H2 Database Console:        http://localhost:8081/h2-console
+   🔧 Backend Services (for developers):
+      • API Gateway:      http://localhost:12001
+      • Auth Service:     http://localhost:8081
+   🌐 Network Access (from other devices on same network):
+      • Main Application: http://:12000
+   🌍 External Access (if port forwarding or tunnel is configured):
+      • Main Application: http://98.42.217.60:12000
+🔗 Share these URLs with others:
+   📱 Mobile/Tablet on same network: http://:12000
+   💻 Other Laptops on same network: http://:12000
+   🌍 External devices (if port forwarding/tunnel configured): http://98.42.217.60:12000
 echo ""
 echo "📁 Logs available in:"
 echo "   - logs/gateway.log"
