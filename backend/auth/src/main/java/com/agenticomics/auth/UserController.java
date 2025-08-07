@@ -25,7 +25,7 @@ public class UserController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Missing fields");
             }
             
-            User user = userService.registerUser(request.getUsername(), request.getPassword(), request.getEmail(), request.getTelephone());
+            User user = userService.registerUser(request.getUsername(), request.getPassword(), request.getEmail(), request.getTelephone(), request.getRole());
             return ResponseEntity.ok("Registration successful for user: " + user.getUsername());
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
@@ -52,7 +52,7 @@ public class UserController {
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             String token = jwtUtil.generateToken(user.getUsername());
-            return ResponseEntity.ok(new LoginResponse("Login successful", token, user.getUsername()));
+            return ResponseEntity.ok(new LoginResponse("Login successful", token, user.getUsername(), user.getRole()));
         } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
@@ -100,6 +100,7 @@ public class UserController {
         private String password;
         private String email;
         private String telephone;
+        private String role;
 
         public String getUsername() { return username; }
         public void setUsername(String username) { this.username = username; }
@@ -109,6 +110,8 @@ public class UserController {
         public void setEmail(String email) { this.email = email; }
         public String getTelephone() { return telephone; }
         public void setTelephone(String telephone) { this.telephone = telephone; }
+        public String getRole() { return role; }
+        public void setRole(String role) { this.role = role; }
     }
 
     static class LoginRequest {
@@ -128,11 +131,13 @@ public class UserController {
         private String message;
         private String token;
         private String username;
+        private String role;
 
-        public LoginResponse(String message, String token, String username) {
+        public LoginResponse(String message, String token, String username, String role) {
             this.message = message;
             this.token = token;
             this.username = username;
+            this.role = role;
         }
 
         public String getMessage() { return message; }
@@ -141,6 +146,8 @@ public class UserController {
         public void setToken(String token) { this.token = token; }
         public String getUsername() { return username; }
         public void setUsername(String username) { this.username = username; }
+        public String getRole() { return role; }
+        public void setRole(String role) { this.role = role; }
     }
 
     static class ForgotPasswordRequest {

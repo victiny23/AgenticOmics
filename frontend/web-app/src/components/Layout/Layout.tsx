@@ -86,7 +86,7 @@ const navigationItems: NavigationItem[] = [
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
-  const { isAuthenticated, username, logout } = useAuth()
+  const { isAuthenticated, username, role, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -226,14 +226,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Avatar sx={{ width: 32, height: 32, bgcolor: '#1976d2' }}>
             {username ? username.charAt(0) : 'U'}
           </Avatar>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
-              {username || 'Demo User'}
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#b0b0b0' }}>
-              {username ? 'Researcher' : 'Guest'}
-            </Typography>
-          </Box>
+                                <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
+                          {username || 'Demo User'}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#b0b0b0' }}>
+                          {role || (username ? 'Researcher' : 'Guest')}
+                        </Typography>
+                      </Box>
         </Box>
       </Box>
     </Box>
