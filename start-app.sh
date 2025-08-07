@@ -215,54 +215,91 @@ fi
 mkdir -p logs
 echo "$GATEWAY_PID $AUTH_PID $FRONTEND_PID" > logs/app-pids.txt
 
+# Add at the top, after set -e
+get_local_ip() {
+    if command -v hostname >/dev/null 2>&1; then
+        hostname -I | awk '{print $1}' 2>/dev/null || echo "your-ip-address"
+    elif command -v ip >/dev/null 2>&1; then
+        ip route get 8.8.8.8 | awk '{print $7; exit}' 2>/dev/null || echo "your-ip-address"
+    elif command -v ifconfig >/dev/null 2>&1; then
+        ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1 || echo "your-ip-address"
+    else
+        echo "your-ip-address"
+    fi
+}
+
+get_public_ip() {
+    if [ -n "$EXTERNAL_URL" ]; then
+        echo "$EXTERNAL_URL"
+    elif command -v curl >/dev/null 2>&1; then
+        curl -s https://api.ipify.org || echo "unavailable"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- https://api.ipify.org || echo "unavailable"
+    else
+        echo "unavailable"
+    fi
+}
+
+LOCAL_IP=$(get_local_ip)
+PUBLIC_IP=$(get_public_ip)
+
 echo ""
 if [ "$EXTERNAL_MODE" = true ]; then
     echo "🎉 AgenticOmics Platform Started Successfully with External Access!"
     echo "=================================================================="
     echo ""
     echo "📱 Access the application:"
-    echo "   🌍 External Access (from anywhere on the internet):"
-    echo "      • Main Application: https://work-1-bwktzeajbmgslino.prod-runtime.all-hands.dev"
-    echo "      • API Gateway:      https://work-2-bwktzeajbmgslino.prod-runtime.all-hands.dev"
-    echo ""
-    echo "   🏠 Local Access (for testing):"
+    echo "   🏠 Local Access:"
     echo "      • Main Application: http://localhost:$FRONTEND_PORT"
     echo "      • API Gateway:      http://localhost:$API_GATEWAY_PORT"
     echo "      • Auth Service:     http://localhost:$AUTH_PORT"
+    echo ""
+    echo "   🌐 Network Access (from other devices on same network):"
+    echo "      • Main Application: http://$LOCAL_IP:$FRONTEND_PORT"
+    echo "      • API Gateway:      http://$LOCAL_IP:$API_GATEWAY_PORT"
+    echo "      • Auth Service:     http://$LOCAL_IP:$AUTH_PORT"
+    echo ""
+    echo "   🌍 External Access (if port forwarding or tunnel is configured):"
+    echo "      • Main Application: http://$PUBLIC_IP:$FRONTEND_PORT"
+    echo "      • API Gateway:      http://$PUBLIC_IP:$API_GATEWAY_PORT"
+    echo "      • Auth Service:     http://$PUBLIC_IP:$AUTH_PORT"
+    echo ""
+    echo "🔗 Share these URLs with others:"
+    echo "   📱 Mobile/Tablet on same network: http://$LOCAL_IP:$FRONTEND_PORT"
+    echo "   💻 Other Laptops on same network: http://$LOCAL_IP:$FRONTEND_PORT"
+    echo "   🌍 External devices (if port forwarding/tunnel configured): http://$PUBLIC_IP:$FRONTEND_PORT"
+    echo ""
+    echo "🛑 To stop all services:"
+    echo "   ./stop-app.sh"
+    echo "   or press Ctrl+C in this terminal"
+    echo ""
+    echo "Press Ctrl+C to stop all services..."
 else
     echo "🎉 AgenticOmics Platform Started Successfully!"
     echo "=============================================="
     echo ""
     echo "📱 Access the application:"
-    echo "   🌐 Main Application: http://localhost:3000"
-    echo "   🔧 API Gateway:      http://localhost:8080"
-    echo "   🔐 Auth Service:     http://localhost:8081"
+    echo "   🏠 Local Access:
+      • Main Application (Frontend): http://localhost:$FRONTEND_PORT
+      • H2 Database Console:        http://localhost:$AUTH_PORT/h2-console
+   🔧 Backend Services (for developers):
+      • API Gateway:      http://localhost:$API_GATEWAY_PORT
+      • Auth Service:     http://localhost:$AUTH_PORT
+   🌐 Network Access (from other devices on same network):
+      • Main Application: http://$LOCAL_IP:$FRONTEND_PORT
+   🌍 External Access (if port forwarding or tunnel is configured):
+      • Main Application: http://$PUBLIC_IP:$FRONTEND_PORT
+🔗 Share these URLs with others:
+   📱 Mobile/Tablet on same network: http://$LOCAL_IP:$FRONTEND_PORT
+   💻 Other Laptops on same network: http://$LOCAL_IP:$FRONTEND_PORT
+   🌍 External devices (if port forwarding/tunnel configured): http://$PUBLIC_IP:$FRONTEND_PORT"
+    echo ""
+    echo "🛑 To stop all services:"
+    echo "   ./stop-app.sh"
+    echo "   or press Ctrl+C in this terminal"
+    echo ""
+    echo "Press Ctrl+C to stop all services..."
 fi
-
-echo ""
-echo "📋 Service Status:"
-echo "   ✅ API Gateway running (PID: $GATEWAY_PID)"
-echo "   ✅ Authentication Service running (PID: $AUTH_PID)"
-echo "   ✅ Frontend Application running (PID: $FRONTEND_PID)"
-echo ""
-echo "📁 Logs available in:"
-echo "   - logs/gateway.log"
-echo "   - logs/auth.log"
-echo "   - logs/frontend.log"
-echo ""
-echo "🛑 To stop all services:"
-echo "   ./stop-app.sh"
-echo "   or press Ctrl+C in this terminal"
-echo ""
-
-if [ "$EXTERNAL_MODE" = true ]; then
-    echo "🎯 Open your browser and go to: https://work-1-bwktzeajbmgslino.prod-runtime.all-hands.dev"
-    echo "💡 Test external access with: ./check-external-status.sh"
-else
-    echo "🎯 Open your browser and go to: http://localhost:3000"
-    echo "💡 For external access, restart with: ./start-app.sh --external"
-fi
-echo ""
 
 # Keep the script running and handle Ctrl+C
 cleanup() {
@@ -287,7 +324,6 @@ cleanup() {
 trap cleanup INT TERM
 
 # Wait for user to stop
-echo "Press Ctrl+C to stop all services..."
 while true; do
     sleep 1
 done
