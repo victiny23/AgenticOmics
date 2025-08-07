@@ -17,10 +17,20 @@ const LoginPage: React.FC = () => {
     e.preventDefault();
     setError('');
     try {
-      await axios.post('http://localhost:8081/login', {
+      const response = await axios.post('http://localhost:12001/api/auth/login', {
         username,
         password,
-      }, { withCredentials: true });
+      });
+      
+      // Store JWT token in localStorage
+      localStorage.setItem('jwtToken', response.data.token);
+      localStorage.setItem('username', username);
+      
+      // Update login state in parent component (if needed)
+      window.dispatchEvent(new CustomEvent('loginStateChanged', { 
+        detail: { isLoggedIn: true, username: username } 
+      }));
+      
       navigate('/welcome');
     } catch (err: any) {
       setError('Login failed. Please check your credentials.');
@@ -36,7 +46,7 @@ const LoginPage: React.FC = () => {
       return;
     }
     try {
-      await axios.post('http://localhost:8081/register', {
+      await axios.post('http://localhost:12001/api/auth/register', {
         username,
         password,
         email,

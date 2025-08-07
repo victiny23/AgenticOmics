@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Box,
@@ -85,9 +85,37 @@ const navigationItems: NavigationItem[] = [
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [username, setUsername] = useState('')
   const navigate = useNavigate()
   const location = useLocation()
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    // Check if user is logged in on component mount
+    const token = localStorage.getItem('jwtToken')
+    const storedUsername = localStorage.getItem('username')
+    if (token && storedUsername) {
+      setIsLoggedIn(true)
+      setUsername(storedUsername)
+    }
+
+    // Listen for login/logout events
+    const handleLoginStateChange = (event: CustomEvent) => {
+      setIsLoggedIn(event.detail.isLoggedIn)
+      setUsername(event.detail.username || '')
+    }
+
+    window.addEventListener('loginStateChanged', handleLoginStateChange as EventListener)
+    window.addEventListener('logout', () => {
+      setIsLoggedIn(false)
+      setUsername('')
+    })
+
+    return () => {
+      window.removeEventListener('loginStateChanged', handleLoginStateChange as EventListener)
+      window.removeEventListener('logout', () => {})
+    }
+  }, [])
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
@@ -107,14 +135,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   }
 
   const handleLogin = () => {
-    handleProfileMenuClose();
-    navigate('/login');
-  };
+    handleProfileMenuClose()
+    navigate('/login')
+  }
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    handleProfileMenuClose();
-    // Optionally clear cookies/session here
-  };
+    localStorage.removeItem('jwtToken')
+    localStorage.removeItem('username')
+    setIsLoggedIn(false)
+    setUsername('')
+    handleProfileMenuClose()
+    window.dispatchEvent(new CustomEvent('logout'))
+    navigate('/welcome')
+  }
 
   const drawer = (
     <Box>
@@ -223,14 +255,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           }}
         >
           <Avatar sx={{ width: 32, height: 32, bgcolor: '#1976d2' }}>
-            U
+            {username ? username.charAt(0) : 'U'}
           </Avatar>
           <Box sx={{ flex: 1 }}>
             <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
-              Demo User
+              {username || 'Demo User'}
             </Typography>
             <Typography variant="caption" sx={{ color: '#b0b0b0' }}>
-              Researcher
+              {username ? 'Researcher' : 'Guest'}
             </Typography>
           </Box>
         </Box>
