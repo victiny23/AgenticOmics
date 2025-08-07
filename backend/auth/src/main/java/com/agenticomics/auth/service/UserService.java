@@ -19,7 +19,7 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
     
-    public User registerUser(String username, String password, String email) {
+    public User registerUser(String username, String password, String email, String telephone) {
         // Check if user already exists
         if (userRepository.existsByUsername(username)) {
             throw new RuntimeException("Username already exists");
@@ -29,11 +29,16 @@ public class UserService {
             throw new RuntimeException("Email already exists");
         }
         
+        if (telephone != null && !telephone.trim().isEmpty() && userRepository.existsByTelephone(telephone)) {
+            throw new RuntimeException("Telephone number already exists");
+        }
+        
         // Create new user
         User user = new User();
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
         user.setEmail(email);
+        user.setTelephone(telephone);
         user.setIsActive(true);
         
         return userRepository.save(user);
@@ -41,6 +46,22 @@ public class UserService {
     
     public Optional<User> authenticateUser(String username, String password) {
         Optional<User> userOpt = userRepository.findActiveUserByUsername(username);
+        
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            if (passwordEncoder.matches(password, user.getPassword())) {
+                // Update last login time
+                user.setLastLogin(LocalDateTime.now());
+                userRepository.save(user);
+                return Optional.of(user);
+            }
+        }
+        
+        return Optional.empty();
+    }
+    
+    public Optional<User> authenticateUserByTelephone(String telephone, String password) {
+        Optional<User> userOpt = userRepository.findActiveUserByTelephone(telephone);
         
         if (userOpt.isPresent()) {
             User user = userOpt.get();
@@ -69,6 +90,38 @@ public class UserService {
     
     public boolean existsByEmail(String email) {
         return userRepository.existsByEmail(email);
+    }
+    
+    public boolean existsByTelephone(String telephone) {
+        return userRepository.existsByTelephone(telephone);
+    }
+    
+    public String generatePasswordResetToken(String email) {
+        Optional<User> userOpt = userRepository.findActiveUserByEmail(email);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            String resetToken = java.util.UUID.randomUUID().toString();
+            user.setResetToken(resetToken);
+            user.setResetTokenExpiry(LocalDateTime.now().plusHours(24)); // Token expires in 24 hours
+            userRepository.save(user);
+            return resetToken;
+        }
+        return null;
+    }
+    
+    public boolean resetPassword(String resetToken, String newPassword) {
+        Optional<User> userOpt = userRepository.findActiveUserByResetToken(resetToken);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            if (user.getResetTokenExpiry() != null && user.getResetTokenExpiry().isAfter(LocalDateTime.now())) {
+                user.setPassword(passwordEncoder.encode(newPassword));
+                user.setResetToken(null);
+                user.setResetTokenExpiry(null);
+                userRepository.save(user);
+                return true;
+            }
+        }
+        return false;
     }
     
     public long getActiveUserCount() {

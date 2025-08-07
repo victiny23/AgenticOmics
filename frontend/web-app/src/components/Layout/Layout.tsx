@@ -29,6 +29,7 @@ import {
   Settings,
   Logout,
 } from '@mui/icons-material'
+import { useAuth } from '../../contexts/AuthContext'
 
 const drawerWidth = 280
 
@@ -85,37 +86,9 @@ const navigationItems: NavigationItem[] = [
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [username, setUsername] = useState('')
+  const { isAuthenticated, username, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-
-  useEffect(() => {
-    // Check if user is logged in on component mount
-    const token = localStorage.getItem('jwtToken')
-    const storedUsername = localStorage.getItem('username')
-    if (token && storedUsername) {
-      setIsLoggedIn(true)
-      setUsername(storedUsername)
-    }
-
-    // Listen for login/logout events
-    const handleLoginStateChange = (event: CustomEvent) => {
-      setIsLoggedIn(event.detail.isLoggedIn)
-      setUsername(event.detail.username || '')
-    }
-
-    window.addEventListener('loginStateChanged', handleLoginStateChange as EventListener)
-    window.addEventListener('logout', () => {
-      setIsLoggedIn(false)
-      setUsername('')
-    })
-
-    return () => {
-      window.removeEventListener('loginStateChanged', handleLoginStateChange as EventListener)
-      window.removeEventListener('logout', () => {})
-    }
-  }, [])
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
@@ -139,13 +112,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/login')
   }
   const handleLogout = () => {
-    localStorage.removeItem('jwtToken')
-    localStorage.removeItem('username')
-    setIsLoggedIn(false)
-    setUsername('')
+    logout()
     handleProfileMenuClose()
-    window.dispatchEvent(new CustomEvent('logout'))
-    navigate('/welcome')
+    navigate('/')
   }
 
   const drawer = (
@@ -330,7 +299,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </ListItemIcon>
           Settings
         </MenuItem>
-        {isLoggedIn ? (
+        {isAuthenticated ? (
           <MenuItem onClick={handleLogout}>
             <ListItemIcon>
               <Logout fontSize="small" />
