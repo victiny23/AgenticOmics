@@ -1,38 +1,59 @@
 package com.agenticomics.auth;
 
+import com.agenticomics.auth.entity.User;
+import com.agenticomics.auth.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 @RestController
 public class UserController {
-    private final Map<String, User> users = new ConcurrentHashMap<>();
+
+    @Autowired
+    private UserService userService;
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@RequestBody User user) {
-        if (user.getUsername() == null || user.getPassword() == null || user.getEmail() == null) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Missing fields");
+    public ResponseEntity<String> register(@RequestBody RegisterRequest request) {
+        try {
+            if (request.getUsername() == null || request.getPassword() == null || request.getEmail() == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Missing fields");
+            }
+            
+            User user = userService.registerUser(request.getUsername(), request.getPassword(), request.getEmail());
+            return ResponseEntity.ok("Registration successful for user: " + user.getUsername());
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
-        if (users.containsKey(user.getUsername())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Username already exists");
-        }
-        users.put(user.getUsername(), user);
-        return ResponseEntity.ok("Registration successful");
     }
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody User login) {
-        User user = users.get(login.getUsername());
-        if (user == null || !user.getPassword().equals(login.getPassword())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+        if (request.getUsername() == null || request.getPassword() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
-        return ResponseEntity.ok("Login successful");
+        
+        var userOpt = userService.authenticateUser(request.getUsername(), request.getPassword());
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            String token = jwtUtil.generateToken(user.getUsername());
+            return ResponseEntity.ok(new LoginResponse("Login successful", token, user.getUsername()));
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
     }
 
-    static class User {
+    @GetMapping("/users/count")
+    public ResponseEntity<UserCountResponse> getUserCount() {
+        long count = userService.getActiveUserCount();
+        return ResponseEntity.ok(new UserCountResponse(count));
+    }
+
+    // Request/Response DTOs
+    static class RegisterRequest {
         private String username;
         private String password;
         private String email;
@@ -43,5 +64,45 @@ public class UserController {
         public void setPassword(String password) { this.password = password; }
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
+    }
+
+    static class LoginRequest {
+        private String username;
+        private String password;
+
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+        public String getPassword() { return password; }
+        public void setPassword(String password) { this.password = password; }
+    }
+
+    static class LoginResponse {
+        private String message;
+        private String token;
+        private String username;
+
+        public LoginResponse(String message, String token, String username) {
+            this.message = message;
+            this.token = token;
+            this.username = username;
+        }
+
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
+        public String getToken() { return token; }
+        public void setToken(String token) { this.token = token; }
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+    }
+
+    static class UserCountResponse {
+        private long count;
+
+        public UserCountResponse(long count) {
+            this.count = count;
+        }
+
+        public long getCount() { return count; }
+        public void setCount(long count) { this.count = count; }
     }
 }
