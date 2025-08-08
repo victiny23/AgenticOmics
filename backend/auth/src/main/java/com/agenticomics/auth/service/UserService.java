@@ -29,8 +29,13 @@ public class UserService {
             throw new RuntimeException("Email already exists");
         }
         
-        if (telephone != null && !telephone.trim().isEmpty() && userRepository.existsByTelephone(telephone)) {
-            throw new RuntimeException("Telephone number already exists");
+        // Handle telephone field - only set if not null and not empty
+        String cleanTelephone = null;
+        if (telephone != null && !telephone.trim().isEmpty()) {
+            cleanTelephone = telephone.trim();
+            if (userRepository.existsByTelephone(cleanTelephone)) {
+                throw new RuntimeException("Telephone number already exists");
+            }
         }
         
         // Create new user
@@ -38,7 +43,7 @@ public class UserService {
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
         user.setEmail(email);
-        user.setTelephone(telephone);
+        user.setTelephone(cleanTelephone); // Set to null if empty, otherwise set the cleaned value
         user.setRole(role);
         user.setIsActive(true);
         
@@ -46,7 +51,7 @@ public class UserService {
     }
     
     public Optional<User> authenticateUser(String username, String password) {
-        Optional<User> userOpt = userRepository.findActiveUserByUsername(username);
+        Optional<User> userOpt = userRepository.findUserByUsername(username);
         
         if (userOpt.isPresent()) {
             User user = userOpt.get();
@@ -62,7 +67,10 @@ public class UserService {
     }
     
     public Optional<User> authenticateUserByTelephone(String telephone, String password) {
-        Optional<User> userOpt = userRepository.findActiveUserByTelephone(telephone);
+        if (telephone == null || telephone.trim().isEmpty()) {
+            return Optional.empty(); // Cannot authenticate with null/empty telephone
+        }
+        Optional<User> userOpt = userRepository.findUserByTelephone(telephone.trim());
         
         if (userOpt.isPresent()) {
             User user = userOpt.get();
@@ -94,11 +102,14 @@ public class UserService {
     }
     
     public boolean existsByTelephone(String telephone) {
-        return userRepository.existsByTelephone(telephone);
+        if (telephone == null || telephone.trim().isEmpty()) {
+            return false; // Null or empty telephone doesn't exist
+        }
+        return userRepository.existsByTelephone(telephone.trim());
     }
     
     public String generatePasswordResetToken(String email) {
-        Optional<User> userOpt = userRepository.findActiveUserByEmail(email);
+        Optional<User> userOpt = userRepository.findUserByEmail(email);
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             String resetToken = java.util.UUID.randomUUID().toString();
@@ -111,7 +122,7 @@ public class UserService {
     }
     
     public boolean resetPassword(String resetToken, String newPassword) {
-        Optional<User> userOpt = userRepository.findActiveUserByResetToken(resetToken);
+        Optional<User> userOpt = userRepository.findUserByResetToken(resetToken);
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             if (user.getResetTokenExpiry() != null && user.getResetTokenExpiry().isAfter(LocalDateTime.now())) {
@@ -131,5 +142,76 @@ public class UserService {
     
     public List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+    
+    // Role management methods for PI administrators
+    public List<User> getAllActiveUsers() {
+        return userRepository.findAllActiveUsers();
+    }
+    
+    public List<User> getActiveNonPIUsers() {
+        return userRepository.findActiveNonPIUsers();
+    }
+    
+    public List<User> getAllNonPIUsers() {
+        return userRepository.findAllNonPIUsers();
+    }
+    
+    public List<User> getAllDeactivatedUsers() {
+        return userRepository.findAllDeactivatedUsers();
+    }
+    
+    public List<User> getActiveUsersByRole(String role) {
+        return userRepository.findActiveUsersByRole(role);
+    }
+    
+    public boolean deactivateUser(Long userId, String adminUsername) {
+        // Check if the admin is a Lab PI
+        Optional<User> adminOpt = userRepository.findActiveUserByUsername(adminUsername);
+        if (adminOpt.isEmpty() || !"Lab PI".equals(adminOpt.get().getRole())) {
+            throw new RuntimeException("Only Lab PI users can deactivate accounts");
+        }
+        
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new RuntimeException("User not found");
+        }
+        
+        User user = userOpt.get();
+        if ("Lab PI".equals(user.getRole())) {
+            throw new RuntimeException("Cannot deactivate Lab PI accounts");
+        }
+        
+        user.setIsActive(false);
+        userRepository.save(user);
+        return true;
+    }
+    
+    public boolean activateUser(Long userId, String adminUsername) {
+        // Check if the admin is a Lab PI
+        Optional<User> adminOpt = userRepository.findActiveUserByUsername(adminUsername);
+        if (adminOpt.isEmpty() || !"Lab PI".equals(adminOpt.get().getRole())) {
+            throw new RuntimeException("Only Lab PI users can activate accounts");
+        }
+        
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new RuntimeException("User not found");
+        }
+        
+        User user = userOpt.get();
+        user.setIsActive(true);
+        userRepository.save(user);
+        return true;
+    }
+    
+    public boolean isUserActive(String username) {
+        Optional<User> userOpt = userRepository.findActiveUserByUsername(username);
+        return userOpt.isPresent();
+    }
+    
+    public boolean isUserPI(String username) {
+        Optional<User> userOpt = userRepository.findActiveUserByUsername(username);
+        return userOpt.isPresent() && "Lab PI".equals(userOpt.get().getRole());
     }
 } 

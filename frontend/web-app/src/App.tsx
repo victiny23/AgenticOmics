@@ -1,4 +1,5 @@
 
+import React from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { Box } from '@mui/material'
 import { AuthProvider } from './contexts/AuthContext'
@@ -12,6 +13,8 @@ import ModelPage from './pages/ModelPage'
 import PipelinePage from './pages/PipelinePage'
 import ResultPage from './pages/ResultPage'
 import LoginPage from './pages/LoginPage'
+import RestrictedDashboardPage from './pages/RestrictedDashboardPage'
+import UserManagementPage from './pages/UserManagementPage'
 
 function App() {
   return (
@@ -27,6 +30,18 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <DashboardPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/restricted" element={
+            <ProtectedRoute requireActive={false}>
+              <RestrictedDashboardPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/users" element={
+            <ProtectedRoute>
+              <Layout>
+                <UserManagementPage />
               </Layout>
             </ProtectedRoute>
           } />
