@@ -4,8 +4,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   username: string | null;
   role: string | null;
-  login: (token: string, username: string, role: string) => void;
+  isActive: boolean;
+  login: (token: string, username: string, role: string, isActive?: boolean) => void;
   logout: () => void;
+  checkUserStatus: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,17 +28,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [isActive, setIsActive] = useState<boolean>(true);
 
-    // Check for existing authentication on app load
+  // Check for existing authentication on app load
   useEffect(() => {
     const token = localStorage.getItem('jwtToken');
     const storedUsername = localStorage.getItem('username');
     const storedRole = localStorage.getItem('role');
+    const storedIsActive = localStorage.getItem('isActive');
 
     if (token && storedUsername) {
       setIsAuthenticated(true);
       setUsername(storedUsername);
       setRole(storedRole);
+      setIsActive(storedIsActive !== 'false');
     }
   }, []);
 
@@ -66,31 +71,69 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const login = (token: string, username: string, role: string) => {
+  const login = (token: string, username: string, role: string, isActive: boolean = true) => {
     localStorage.setItem('jwtToken', token);
     localStorage.setItem('username', username);
     localStorage.setItem('role', role);
+    localStorage.setItem('isActive', isActive.toString());
     setIsAuthenticated(true);
     setUsername(username);
     setRole(role);
+    setIsActive(isActive);
   };
 
   const logout = () => {
     localStorage.removeItem('jwtToken');
     localStorage.removeItem('username');
     localStorage.removeItem('role');
+    localStorage.removeItem('isActive');
     setIsAuthenticated(false);
     setUsername(null);
     setRole(null);
+    setIsActive(true);
     window.dispatchEvent(new CustomEvent('logout'));
+  };
+
+  const checkUserStatus = async (): Promise<boolean> => {
+    try {
+      const token = localStorage.getItem('jwtToken');
+      const currentUsername = localStorage.getItem('username');
+      
+      if (!token || !currentUsername) {
+        return false;
+      }
+
+      const response = await fetch(`http://localhost:12001/api/auth/admin/users/status/${currentUsername}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Username': currentUsername
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const userIsActive = data.isActive;
+        setIsActive(userIsActive);
+        localStorage.setItem('isActive', userIsActive.toString());
+        return userIsActive;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking user status:', error);
+      return false;
+    }
   };
 
   const value = {
     isAuthenticated,
     username,
     role,
+    isActive,
     login,
     logout,
+    checkUserStatus,
   };
 
   return (

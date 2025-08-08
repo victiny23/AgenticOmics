@@ -391,6 +391,12 @@ jspm_packages/
 # DynamoDB Local files
 .dynamodb/
 
+# H2 Database files
+*.mv.db
+*.trace.db
+*.lock.db
+auth-db.mv.db
+
 # TernJS port file
 .tern-port
 

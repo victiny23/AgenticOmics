@@ -25,6 +25,7 @@ import {
   Psychology as ModelIcon,
   AccountTree as PipelineIcon,
   Assessment as ResultIcon,
+  AdminPanelSettings,
   AccountCircle,
   Settings,
   Logout,
@@ -207,6 +208,51 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </ListItem>
           )
         })}
+        
+        {/* User Management for PI users */}
+        {role === 'Lab PI' && (
+          <ListItem disablePadding sx={{ mb: 1 }}>
+            <ListItemButton
+              onClick={() => handleNavigation('/admin/users')}
+              sx={{
+                borderRadius: 2,
+                mx: 1,
+                backgroundColor: location.pathname === '/admin/users' ? 'rgba(25, 118, 210, 0.2)' : 'transparent',
+                '&:hover': {
+                  backgroundColor: location.pathname === '/admin/users' 
+                    ? 'rgba(25, 118, 210, 0.3)' 
+                    : 'rgba(255, 255, 255, 0.1)',
+                },
+                border: location.pathname === '/admin/users' ? '1px solid rgba(25, 118, 210, 0.5)' : '1px solid transparent',
+              }}
+            >
+              <ListItemIcon
+                sx={{
+                  color: location.pathname === '/admin/users' ? '#42a5f5' : '#b0b0b0',
+                  minWidth: 40,
+                }}
+              >
+                <AdminPanelSettings />
+              </ListItemIcon>
+              <ListItemText
+                primary="User Management"
+                secondary="Manage user accounts and permissions"
+                primaryTypographyProps={{
+                  sx: {
+                    color: location.pathname === '/admin/users' ? 'white' : '#e0e0e0',
+                    fontWeight: location.pathname === '/admin/users' ? 600 : 400,
+                  },
+                }}
+                secondaryTypographyProps={{
+                  sx: {
+                    color: '#888',
+                    fontSize: '0.75rem',
+                  },
+                }}
+              />
+            </ListItemButton>
+          </ListItem>
+        )}
       </List>
 
       <Divider sx={{ borderColor: '#333', mx: 2 }} />
@@ -226,21 +272,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Avatar sx={{ width: 32, height: 32, bgcolor: '#1976d2' }}>
             {username ? username.charAt(0) : 'U'}
           </Avatar>
-                                <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
-                          {username || 'Demo User'}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#b0b0b0' }}>
-                          {role || (username ? 'Researcher' : 'Guest')}
-                        </Typography>
-                      </Box>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
+              {username || 'Demo User'}
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#b0b0b0' }}>
+              {role || (username ? 'Researcher' : 'Guest')}
+            </Typography>
+          </Box>
         </Box>
       </Box>
     </Box>
   )
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
       {/* App Bar */}
       <AppBar
         position="fixed"
@@ -366,9 +412,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         component="main"
         sx={{
           flexGrow: 1,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
           minHeight: '100vh',
           backgroundColor: '#f5f5f5',
+          overflowX: 'hidden',
         }}
       >
         <Toolbar />
