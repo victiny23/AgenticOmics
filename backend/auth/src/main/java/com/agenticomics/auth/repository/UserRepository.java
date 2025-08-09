@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -15,13 +16,54 @@ public interface UserRepository extends JpaRepository<User, Long> {
     
     Optional<User> findByEmail(String email);
     
+    Optional<User> findByTelephone(String telephone);
+    
     boolean existsByUsername(String username);
     
     boolean existsByEmail(String email);
     
+    boolean existsByTelephone(String telephone);
+    
     @Query("SELECT u FROM User u WHERE u.username = :username AND u.isActive = true")
     Optional<User> findActiveUserByUsername(@Param("username") String username);
     
+    @Query("SELECT u FROM User u WHERE u.telephone = :telephone AND u.isActive = true")
+    Optional<User> findActiveUserByTelephone(@Param("telephone") String telephone);
+    
+    @Query("SELECT u FROM User u WHERE u.email = :email AND u.isActive = true")
+    Optional<User> findActiveUserByEmail(@Param("email") String email);
+    
+    @Query("SELECT u FROM User u WHERE u.resetToken = :resetToken AND u.isActive = true")
+    Optional<User> findActiveUserByResetToken(@Param("resetToken") String resetToken);
+    
+    // Lookups without active flag (used for password reset to support deactivated users)
+    @Query("SELECT u FROM User u WHERE u.email = :email")
+    Optional<User> findUserByEmail(@Param("email") String email);
+    
+    @Query("SELECT u FROM User u WHERE u.resetToken = :resetToken")
+    Optional<User> findUserByResetToken(@Param("resetToken") String resetToken);
+    
     @Query("SELECT COUNT(u) FROM User u WHERE u.isActive = true")
     long countActiveUsers();
+    
+    @Query("SELECT u FROM User u WHERE u.isActive = true")
+    List<User> findAllActiveUsers();
+    
+    @Query("SELECT u FROM User u WHERE u.role = :role AND u.isActive = true")
+    List<User> findActiveUsersByRole(@Param("role") String role);
+    
+    @Query("SELECT u FROM User u WHERE u.role != 'Lab PI' AND u.isActive = true")
+    List<User> findActiveNonPIUsers();
+    
+    @Query("SELECT u FROM User u WHERE u.role != 'Lab PI'")
+    List<User> findAllNonPIUsers();
+    
+    @Query("SELECT u FROM User u WHERE u.isActive = false")
+    List<User> findAllDeactivatedUsers();
+    
+    @Query("SELECT u FROM User u WHERE u.username = :username")
+    Optional<User> findUserByUsername(@Param("username") String username);
+    
+    @Query("SELECT u FROM User u WHERE u.telephone = :telephone")
+    Optional<User> findUserByTelephone(@Param("telephone") String telephone);
 } 

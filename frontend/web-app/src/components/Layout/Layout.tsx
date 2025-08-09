@@ -25,10 +25,12 @@ import {
   Psychology as ModelIcon,
   AccountTree as PipelineIcon,
   Assessment as ResultIcon,
+  AdminPanelSettings,
   AccountCircle,
   Settings,
   Logout,
 } from '@mui/icons-material'
+import { useAuth } from '../../contexts/AuthContext'
 
 const drawerWidth = 280
 
@@ -85,37 +87,9 @@ const navigationItems: NavigationItem[] = [
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [username, setUsername] = useState('')
+  const { isAuthenticated, username, role, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-
-  useEffect(() => {
-    // Check if user is logged in on component mount
-    const token = localStorage.getItem('jwtToken')
-    const storedUsername = localStorage.getItem('username')
-    if (token && storedUsername) {
-      setIsLoggedIn(true)
-      setUsername(storedUsername)
-    }
-
-    // Listen for login/logout events
-    const handleLoginStateChange = (event: CustomEvent) => {
-      setIsLoggedIn(event.detail.isLoggedIn)
-      setUsername(event.detail.username || '')
-    }
-
-    window.addEventListener('loginStateChanged', handleLoginStateChange as EventListener)
-    window.addEventListener('logout', () => {
-      setIsLoggedIn(false)
-      setUsername('')
-    })
-
-    return () => {
-      window.removeEventListener('loginStateChanged', handleLoginStateChange as EventListener)
-      window.removeEventListener('logout', () => {})
-    }
-  }, [])
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
@@ -139,13 +113,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/login')
   }
   const handleLogout = () => {
-    localStorage.removeItem('jwtToken')
-    localStorage.removeItem('username')
-    setIsLoggedIn(false)
-    setUsername('')
+    logout()
     handleProfileMenuClose()
-    window.dispatchEvent(new CustomEvent('logout'))
-    navigate('/welcome')
+    navigate('/')
   }
 
   const drawer = (
@@ -238,6 +208,51 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </ListItem>
           )
         })}
+        
+        {/* User Management for PI users */}
+        {role === 'Lab PI' && (
+          <ListItem disablePadding sx={{ mb: 1 }}>
+            <ListItemButton
+              onClick={() => handleNavigation('/admin/users')}
+              sx={{
+                borderRadius: 2,
+                mx: 1,
+                backgroundColor: location.pathname === '/admin/users' ? 'rgba(25, 118, 210, 0.2)' : 'transparent',
+                '&:hover': {
+                  backgroundColor: location.pathname === '/admin/users' 
+                    ? 'rgba(25, 118, 210, 0.3)' 
+                    : 'rgba(255, 255, 255, 0.1)',
+                },
+                border: location.pathname === '/admin/users' ? '1px solid rgba(25, 118, 210, 0.5)' : '1px solid transparent',
+              }}
+            >
+              <ListItemIcon
+                sx={{
+                  color: location.pathname === '/admin/users' ? '#42a5f5' : '#b0b0b0',
+                  minWidth: 40,
+                }}
+              >
+                <AdminPanelSettings />
+              </ListItemIcon>
+              <ListItemText
+                primary="User Management"
+                secondary="Manage user accounts and permissions"
+                primaryTypographyProps={{
+                  sx: {
+                    color: location.pathname === '/admin/users' ? 'white' : '#e0e0e0',
+                    fontWeight: location.pathname === '/admin/users' ? 600 : 400,
+                  },
+                }}
+                secondaryTypographyProps={{
+                  sx: {
+                    color: '#888',
+                    fontSize: '0.75rem',
+                  },
+                }}
+              />
+            </ListItemButton>
+          </ListItem>
+        )}
       </List>
 
       <Divider sx={{ borderColor: '#333', mx: 2 }} />
@@ -262,7 +277,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {username || 'Demo User'}
             </Typography>
             <Typography variant="caption" sx={{ color: '#b0b0b0' }}>
-              {username ? 'Researcher' : 'Guest'}
+              {role || (username ? 'Researcher' : 'Guest')}
             </Typography>
           </Box>
         </Box>
@@ -271,7 +286,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   )
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
       {/* App Bar */}
       <AppBar
         position="fixed"
@@ -330,7 +345,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </ListItemIcon>
           Settings
         </MenuItem>
-        {isLoggedIn ? (
+        {isAuthenticated ? (
           <MenuItem onClick={handleLogout}>
             <ListItemIcon>
               <Logout fontSize="small" />
@@ -397,9 +412,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         component="main"
         sx={{
           flexGrow: 1,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
           minHeight: '100vh',
           backgroundColor: '#f5f5f5',
+          overflowX: 'hidden',
         }}
       >
         <Toolbar />

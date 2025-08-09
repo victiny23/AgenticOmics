@@ -27,6 +27,18 @@ public class User {
     @Column(unique = true, nullable = false)
     private String email;
     
+    @Column(name = "telephone", unique = true)
+    private String telephone;
+    
+    @Column(name = "role")
+    private String role;
+    
+    @Column(name = "reset_token")
+    private String resetToken;
+    
+    @Column(name = "reset_token_expiry")
+    private LocalDateTime resetTokenExpiry;
+    
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     
