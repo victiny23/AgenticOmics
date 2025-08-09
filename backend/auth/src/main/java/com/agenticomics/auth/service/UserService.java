@@ -88,9 +88,22 @@ public class UserService {
     public Optional<User> findByUsername(String username) {
         return userRepository.findActiveUserByUsername(username);
     }
+
+    public User save(User user) {
+        return userRepository.save(user);
+    }
     
     public Optional<User> findById(Long id) {
         return userRepository.findById(id);
+    }
+    
+    public boolean deleteByUsername(String username) {
+        Optional<User> user = userRepository.findByUsername(username);
+        if (user.isPresent()) {
+            userRepository.deleteByUsername(username);
+            return true;
+        }
+        return false;
     }
     
     public boolean existsByUsername(String username) {

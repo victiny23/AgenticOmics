@@ -5,9 +5,12 @@ interface AuthContextType {
   username: string | null;
   role: string | null;
   isActive: boolean;
+  photoUrl: string | null;
   login: (token: string, username: string, role: string, isActive?: boolean) => void;
   logout: () => void;
   checkUserStatus: () => Promise<boolean>;
+  setPhotoUrl: (url: string | null) => void;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,6 +32,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [username, setUsername] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [isActive, setIsActive] = useState<boolean>(true);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   // Check for existing authentication on app load
   useEffect(() => {
@@ -36,12 +40,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const storedUsername = localStorage.getItem('username');
     const storedRole = localStorage.getItem('role');
     const storedIsActive = localStorage.getItem('isActive');
+    const storedPhotoUrl = localStorage.getItem('photoUrl');
 
     if (token && storedUsername) {
       setIsAuthenticated(true);
       setUsername(storedUsername);
       setRole(storedRole);
       setIsActive(storedIsActive !== 'false');
+      setPhotoUrl(storedPhotoUrl);
     }
   }, []);
 
@@ -87,10 +93,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem('username');
     localStorage.removeItem('role');
     localStorage.removeItem('isActive');
+    localStorage.removeItem('photoUrl');
     setIsAuthenticated(false);
     setUsername(null);
     setRole(null);
     setIsActive(true);
+    setPhotoUrl(null);
     window.dispatchEvent(new CustomEvent('logout'));
   };
 
@@ -126,14 +134,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const setPhotoUrlAndPersist = (url: string | null) => {
+    setPhotoUrl(url);
+    if (url) {
+      localStorage.setItem('photoUrl', url);
+    } else {
+      localStorage.removeItem('photoUrl');
+    }
+  };
+
+  const refreshProfile = async () => {
+    try {
+      const token = localStorage.getItem('jwtToken');
+      const currentUsername = localStorage.getItem('username');
+      if (!token || !currentUsername) return;
+      const res = await fetch('http://localhost:12001/api/auth/profile', {
+        headers: { Authorization: `Bearer ${token}`, 'X-Username': currentUsername }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.photoUrl) setPhotoUrlAndPersist(data.photoUrl);
+        if (data.role) setRole(data.role);
+        if (typeof data.isActive === 'boolean') {
+          setIsActive(data.isActive);
+          localStorage.setItem('isActive', data.isActive.toString());
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshProfile();
+    }
+  }, [isAuthenticated, username]);
+
   const value = {
     isAuthenticated,
     username,
     role,
     isActive,
+    photoUrl,
     login,
     logout,
     checkUserStatus,
+    setPhotoUrl: setPhotoUrlAndPersist,
+    refreshProfile,
   };
 
   return (

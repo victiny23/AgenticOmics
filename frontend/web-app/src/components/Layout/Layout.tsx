@@ -87,7 +87,7 @@ const navigationItems: NavigationItem[] = [
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
-  const { isAuthenticated, username, role, logout } = useAuth()
+  const { isAuthenticated, username, role, photoUrl, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -101,6 +101,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const handleProfileMenuClose = () => {
     setAnchorEl(null)
+  }
+  
+  const goToSettings = () => {
+    handleProfileMenuClose()
+    navigate('/settings')
   }
 
   const handleNavigation = (path: string) => {
@@ -269,8 +274,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             backgroundColor: 'rgba(255, 255, 255, 0.05)',
           }}
         >
-          <Avatar sx={{ width: 32, height: 32, bgcolor: '#1976d2' }}>
-            {username ? username.charAt(0) : 'U'}
+          <Avatar
+            sx={{ width: 32, height: 32, bgcolor: '#1976d2' }}
+            src={photoUrl ? (photoUrl.startsWith('http') ? photoUrl : `http://localhost:12001${photoUrl}`) : undefined}
+          >
+            {!photoUrl && (username ? username.charAt(0) : 'U')}
           </Avatar>
           <Box sx={{ flex: 1 }}>
             <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
@@ -325,7 +333,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             onClick={handleProfileMenuOpen}
             color="inherit"
           >
-            <AccountCircle />
+            {isAuthenticated && photoUrl ? (
+              <Avatar src={photoUrl.startsWith('http') ? photoUrl : `http://localhost:12001${photoUrl}`} sx={{ width: 32, height: 32 }} />
+            ) : (
+              <AccountCircle />
+            )}
           </IconButton>
         </Toolbar>
       </AppBar>
@@ -339,7 +351,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         open={Boolean(anchorEl)}
         onClose={handleProfileMenuClose}
       >
-        <MenuItem onClick={handleProfileMenuClose}>
+        <MenuItem onClick={goToSettings}>
           <ListItemIcon>
             <Settings fontSize="small" />
           </ListItemIcon>

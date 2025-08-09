@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "users")
@@ -32,6 +33,15 @@ public class User {
     
     @Column(name = "role")
     private String role;
+
+    @Column(name = "birthday")
+    private LocalDate birthday;
+
+    @Column(name = "student_id", unique = true)
+    private String studentId;
+
+    @Column(name = "photo_url")
+    private String photoUrl;
     
     @Column(name = "reset_token")
     private String resetToken;

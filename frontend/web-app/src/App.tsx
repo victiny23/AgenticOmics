@@ -15,6 +15,7 @@ import ResultPage from './pages/ResultPage'
 import LoginPage from './pages/LoginPage'
 import RestrictedDashboardPage from './pages/RestrictedDashboardPage'
 import UserManagementPage from './pages/UserManagementPage'
+import SettingsPage from './pages/SettingsPage'
 
 function App() {
   return (
@@ -42,6 +43,13 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <UserManagementPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Layout>
+                <SettingsPage />
               </Layout>
             </ProtectedRoute>
           } />

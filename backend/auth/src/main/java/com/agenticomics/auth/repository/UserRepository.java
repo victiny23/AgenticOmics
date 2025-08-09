@@ -66,4 +66,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     
     @Query("SELECT u FROM User u WHERE u.telephone = :telephone")
     Optional<User> findUserByTelephone(@Param("telephone") String telephone);
+    
+    void deleteByUsername(String username);
 } 

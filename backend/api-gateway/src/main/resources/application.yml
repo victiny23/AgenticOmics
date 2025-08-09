@@ -26,6 +26,10 @@ spring:
             - Path=/api/auth/**
           filters:
             - StripPrefix=2
+        - id: auth-static-uploads
+          uri: http://${SERVER_ADDRESS:localhost}:${AUTH_PORT:8081}
+          predicates:
+            - Path=/uploads/**
         - id: data-management-service
           uri: http://${SERVER_ADDRESS:localhost}:8082
           predicates:

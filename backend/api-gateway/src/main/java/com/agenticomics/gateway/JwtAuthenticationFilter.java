@@ -24,11 +24,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getPath().value();
 
-        // Skip authentication for auth endpoints
+        // Skip authentication for public endpoints
         if (path.startsWith("/api/auth/register") || 
             path.startsWith("/api/auth/login") || 
             path.startsWith("/api/auth/forgot-password") ||
-            path.startsWith("/api/auth/reset-password")) {
+            path.startsWith("/api/auth/reset-password") ||
+            path.startsWith("/uploads/")) {
             return chain.filter(exchange);
         }
 
