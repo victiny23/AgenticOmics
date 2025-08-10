@@ -1,0 +1,63 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: data-management-service
+  
+  # Database configuration (using H2 for development)
+  datasource:
+    url: jdbc:h2:file:./data/data-management-db
+    username: sa
+    password: password
+    driver-class-name: org.h2.Driver
+  
+  # JPA configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+  
+  # H2 Console (for development)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  
+  # File upload configuration
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+      enabled: true
+
+# File storage configuration
+app:
+  file-storage:
+    # Local storage path for uploaded files
+    local-path: ./data/uploads/omics-data
+    # Maximum file size in bytes (100MB)
+    max-file-size: 104857600
+    # Allowed file extensions (comma-separated)
+    allowed-extensions: .fastq,.fq,.fasta,.fa,.bam,.sam,.vcf,.csv,.tsv,.xlsx,.xls,.bed,.gtf,.gff,.json,.xml,.zip,.tar.gz,.txt
+
+# Eureka client configuration (disabled for now)
+eureka:
+  client:
+    enabled: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+# Logging configuration
+logging:
+  level:
+    com.agenticomics.datamanagement: DEBUG
+    org.springframework.web: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n" 

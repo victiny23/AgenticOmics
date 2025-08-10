@@ -272,9 +272,10 @@ const WelcomePage: React.FC = () => {
             <Typography 
               variant="h6" 
               sx={{ 
-                color: 'text.secondary',
+                color: '#ffffff',
                 mb: 3,
-                fontWeight: 600
+                fontWeight: 600,
+                textAlign: 'center'
               }}
             >
               Why Choose AgenticOmics?

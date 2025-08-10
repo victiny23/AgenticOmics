@@ -51,6 +51,7 @@ export SERVER_ADDRESS=0.0.0.0
 export FRONTEND_PORT=12000
 export API_GATEWAY_PORT=12001
 export AUTH_PORT=8081
+export DATA_MANAGEMENT_PORT=8082
 export VITE_HOST=0.0.0.0
 export VITE_PORT=12000
 export VITE_API_TARGET=https://work-2-bwktzeajbmgslino.prod-runtime.all-hands.dev
@@ -86,6 +87,12 @@ nohup mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=$AUTH_PORT 
 AUTH_PID=$!
 cd ../..
 
+echo "📁 Starting Data Management Service (port $DATA_MANAGEMENT_PORT) with external access..."
+cd backend/data-management
+nohup mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=$DATA_MANAGEMENT_PORT --server.address=$SERVER_ADDRESS" > ../../logs/data-management.log 2>&1 &
+DATA_MANAGEMENT_PID=$!
+cd ../..
+
 # Wait for backend services to start
 echo "⏳ Waiting for API Gateway to start on port $API_GATEWAY_PORT..."
 for i in {1..30}; do
@@ -101,6 +108,16 @@ echo "⏳ Waiting for Authentication Service to start on port $AUTH_PORT..."
 for i in {1..30}; do
     if curl -s http://localhost:$AUTH_PORT/actuator/health >/dev/null 2>&1; then
         echo "✅ Authentication Service is ready!"
+        break
+    fi
+    echo "   Attempt $i/30 - waiting..."
+    sleep 2
+done
+
+echo "⏳ Waiting for Data Management Service to start on port $DATA_MANAGEMENT_PORT..."
+for i in {1..30}; do
+    if curl -s http://localhost:$DATA_MANAGEMENT_PORT/api/data/health >/dev/null 2>&1; then
+        echo "✅ Data Management Service is ready!"
         break
     fi
     echo "   Attempt $i/30 - waiting..."
@@ -167,6 +184,7 @@ echo "      • H2 Database Console:        http://localhost:$AUTH_PORT/h2-conso
 echo "   🔧 Backend Services (for developers):"
 echo "      • API Gateway:      http://localhost:$API_GATEWAY_PORT"
 echo "      • Auth Service:     http://localhost:$AUTH_PORT"
+echo "      • Data Management:  http://localhost:$DATA_MANAGEMENT_PORT"
 echo "   🌐 Network Access (from other devices on same network):"
 echo "      • Main Application: http://$LOCAL_IP:$FRONTEND_PORT"
 echo "   🌍 External Access (if port forwarding or tunnel is configured):"
@@ -175,6 +193,7 @@ echo
 echo "📁 Logs available in:"
 echo "   - logs/gateway.log"
 echo "   - logs/auth.log"
+echo "   - logs/data-management.log"
 echo "   - logs/frontend.log"
 echo ""
 echo "🛑 To stop all services:"
