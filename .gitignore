@@ -396,6 +396,21 @@ jspm_packages/
 *.trace.db
 *.lock.db
 auth-db.mv.db
+data-management-db.mv.db
+
+# User data and uploads
+backend/auth/data/
+backend/data-management/data/
+backend/*/data/
+data/
+
+# Profile photos and user uploads
+**/uploads/profile-photos/
+**/uploads/omics-data/
+**/uploads/
+
+# Database directories
+**/data/
 
 # TernJS port file
 .tern-port
