@@ -16,6 +16,9 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -37,6 +40,9 @@ public class UserService {
     
     @Autowired
     private TeamRepository teamRepository;
+    
+    @Autowired
+    private com.agenticomics.auth.repository.UserLabMembershipRepository userLabMembershipRepository;
     
     public User registerUser(String username, String password, String email, String telephone, String role) {
         // Check if user already exists
@@ -222,6 +228,51 @@ public class UserService {
         return userRepository.findAllNonPIUsers();
     }
     
+    public List<User> getUsersInAdminLabs(String adminUsername) {
+        Optional<User> adminOpt = userRepository.findActiveUserByUsername(adminUsername);
+        if (adminOpt.isEmpty()) {
+            throw new RuntimeException("Admin user not found");
+        }
+        
+        User admin = adminOpt.get();
+        if (!"Lab PI".equals(admin.getRole())) {
+            throw new RuntimeException("Only Lab PI users can access this endpoint");
+        }
+        
+        // Get all labs where the admin is a member
+        List<UserLabMembership> adminLabMemberships = userLabMembershipRepository
+                .findByUserIdAndIsActiveTrue(admin.getId());
+        
+        if (adminLabMemberships.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        // Get all lab IDs where admin is a member
+        List<Long> adminLabIds = adminLabMemberships.stream()
+                .map(membership -> membership.getLab().getId())
+                .collect(Collectors.toList());
+        
+        // Get all users who are members of these labs
+        List<UserLabMembership> allMemberships = userLabMembershipRepository
+                .findByLabIdInAndIsActiveTrue(adminLabIds);
+        
+        // Extract unique users
+        Set<Long> userIds = allMemberships.stream()
+                .map(membership -> membership.getUser().getId())
+                .collect(Collectors.toSet());
+        
+        // Return users without their relationships to avoid circular references
+        List<User> users = userRepository.findAllById(userIds);
+        users.forEach(user -> {
+            user.setLabMemberships(null);
+            user.setTeamMemberships(null);
+            user.setSubordinates(null);
+            user.setSupervisor(null);
+        });
+        
+        return users;
+    }
+    
     public List<User> getAllDeactivatedUsers() {
         return userRepository.findAllDeactivatedUsers();
     }
@@ -247,6 +298,25 @@ public class UserService {
             throw new RuntimeException("Cannot deactivate Lab PI accounts");
         }
         
+        // Check if the target user is in any of the admin's labs
+        boolean canManageUser = false;
+        List<UserLabMembership> adminLabMemberships = userLabMembershipRepository.findByUserIdAndIsActiveTrue(adminOpt.get().getId());
+        
+        for (UserLabMembership adminMembership : adminLabMemberships) {
+            List<UserLabMembership> userMemberships = userLabMembershipRepository.findByUserIdAndIsActiveTrue(userId);
+            for (UserLabMembership userMembership : userMemberships) {
+                if (adminMembership.getLab().getId().equals(userMembership.getLab().getId())) {
+                    canManageUser = true;
+                    break;
+                }
+            }
+            if (canManageUser) break;
+        }
+        
+        if (!canManageUser) {
+            throw new RuntimeException("You can only deactivate users who are members of your labs");
+        }
+        
         user.setIsActive(false);
         userRepository.save(user);
         return true;
@@ -265,6 +335,26 @@ public class UserService {
         }
         
         User user = userOpt.get();
+        
+        // Check if the target user is in any of the admin's labs
+        boolean canManageUser = false;
+        List<UserLabMembership> adminLabMemberships = userLabMembershipRepository.findByUserIdAndIsActiveTrue(adminOpt.get().getId());
+        
+        for (UserLabMembership adminMembership : adminLabMemberships) {
+            List<UserLabMembership> userMemberships = userLabMembershipRepository.findByUserIdAndIsActiveTrue(userId);
+            for (UserLabMembership userMembership : userMemberships) {
+                if (adminMembership.getLab().getId().equals(userMembership.getLab().getId())) {
+                    canManageUser = true;
+                    break;
+                }
+            }
+            if (canManageUser) break;
+        }
+        
+        if (!canManageUser) {
+            throw new RuntimeException("You can only activate users who are members of your labs");
+        }
+        
         user.setIsActive(true);
         userRepository.save(user);
         return true;

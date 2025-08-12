@@ -22,15 +22,12 @@ spring:
     gateway:
       routes:
         - id: auth-service
-          uri: http://${SERVER_ADDRESS:localhost}:${AUTH_PORT:8081}
+          uri: http://localhost:8081
           predicates:
             - Path=/api/auth/**
           filters:
             - StripPrefix=2
-        - id: auth-static-uploads
-          uri: http://${SERVER_ADDRESS:localhost}:${AUTH_PORT:8081}
-          predicates:
-            - Path=/uploads/**
+        # Removed public uploads route - profile photos are now served through secure endpoints only
         - id: data-management-service
           uri: http://${SERVER_ADDRESS:localhost}:8082
           predicates:

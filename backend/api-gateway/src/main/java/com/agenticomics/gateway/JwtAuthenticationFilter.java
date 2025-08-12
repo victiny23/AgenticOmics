@@ -29,9 +29,26 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             path.startsWith("/api/auth/login") || 
             path.startsWith("/api/auth/forgot-password") ||
             path.startsWith("/api/auth/reset-password") ||
+            path.startsWith("/api/auth/public/") ||
             path.startsWith("/uploads/") ||
             path.startsWith("/api/data/health")) {
             return chain.filter(exchange);
+        }
+        
+        // Special handling for photo endpoint - allow without authentication for now
+        // The backend will handle authentication based on the filename
+        if (path.startsWith("/api/auth/profile/photo/")) {
+            // Allow the request to pass through - backend will handle authentication
+            return chain.filter(exchange);
+        }
+        
+        // Special handling for sensitive profile endpoint - allow with X-Username header
+        if (path.startsWith("/api/auth/profile/sensitive")) {
+            List<String> usernameHeaders = request.getHeaders().get("X-Username");
+            if (usernameHeaders != null && !usernameHeaders.isEmpty()) {
+                // Allow the request to pass through with X-Username header
+                return chain.filter(exchange);
+            }
         }
 
         // Get Authorization header

@@ -37,9 +37,14 @@ const LoginPage: React.FC = () => {
   const [isLoadingLabs, setIsLoadingLabs] = useState(false);
   const [isLoadingSupervisors, setIsLoadingSupervisors] = useState(false);
   
+  // New state for team selection
+  const [availableTeams, setAvailableTeams] = useState<Array<{id: number, teamName: string, teamId: string}>>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+  const [isLoadingTeams, setIsLoadingTeams] = useState(false);
+  
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, refreshProfile } = useAuth();
 
   // Role options
   const roleOptions = [
@@ -79,10 +84,11 @@ const LoginPage: React.FC = () => {
     }
   }, [location.state]);
 
-  // Load available labs when registration form is shown
+  // Load available labs and teams when registration form is shown
   useEffect(() => {
     if (isRegister) {
       loadAvailableLabs();
+      loadAvailableTeams();
     }
   }, [isRegister]);
 
@@ -98,11 +104,7 @@ const LoginPage: React.FC = () => {
   const loadAvailableLabs = async () => {
     try {
       setIsLoadingLabs(true);
-      const response = await axios.get('http://localhost:12001/api/auth/admin/labs', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('jwtToken') || 'guest'}`,
-        },
-      });
+      const response = await axios.get('http://localhost:12001/api/auth/public/labs');
       setAvailableLabs(response.data || []);
     } catch (error) {
       console.log('Could not load labs, will allow manual entry');
@@ -112,14 +114,23 @@ const LoginPage: React.FC = () => {
     }
   };
 
+  const loadAvailableTeams = async () => {
+    try {
+      setIsLoadingTeams(true);
+      const response = await axios.get('http://localhost:12001/api/auth/public/teams');
+      setAvailableTeams(response.data || []);
+    } catch (error) {
+      console.log('Could not load teams, will allow manual entry');
+      setAvailableTeams([]);
+    } finally {
+      setIsLoadingTeams(false);
+    }
+  };
+
   const loadAvailableSupervisors = async (labId: number) => {
     try {
       setIsLoadingSupervisors(true);
-      const response = await axios.get(`http://localhost:12001/api/auth/admin/labs/${labId}/supervisors`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('jwtToken') || 'guest'}`,
-        },
-      });
+      const response = await axios.get(`http://localhost:12001/api/auth/public/labs/${labId}/supervisors`);
       setAvailableSupervisors(response.data || []);
     } catch (error) {
       console.log('Could not load supervisors for this lab');
@@ -149,6 +160,9 @@ const LoginPage: React.FC = () => {
       // Use auth context to login with user status
       const isActive = response.data.isActive !== false; // Default to true if not provided
       login(response.data.token, response.data.username, response.data.role, isActive);
+      
+      // Refresh profile to get photo URL and other sensitive data
+      await refreshProfile();
       
       // Navigate based on user status
       if (isActive) {
@@ -654,6 +668,41 @@ const LoginPage: React.FC = () => {
                    </Select>
                  </FormControl>
                )}
+              
+              {/* Team Information Section */}
+              <Typography variant="h6" sx={{ mt: 3, mb: 2, color: '#1e3c72', fontWeight: 600 }}>
+                Team Information (Optional)
+              </Typography>
+              
+              {isLoadingTeams ? (
+                <Typography>Loading teams...</Typography>
+              ) : (
+                <FormControl fullWidth margin="normal">
+                  <InputLabel>Select Existing Team (Optional)</InputLabel>
+                  <Select
+                    value={selectedTeamId || ''}
+                    label="Select Existing Team (Optional)"
+                    onChange={(e) => {
+                      const teamId = Number(e.target.value);
+                      if (teamId === 0) {
+                        // "No Team" option selected
+                        setSelectedTeamId(null);
+                      } else {
+                        setSelectedTeamId(teamId);
+                      }
+                    }}
+                  >
+                    <MenuItem value={0}>
+                      <em>No Team - I'm not part of a specific team</em>
+                    </MenuItem>
+                    {availableTeams.map((team) => (
+                      <MenuItem key={team.id} value={team.id}>
+                        {team.teamName} ({team.teamId})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
               
               {/* Primary Lab - Only show if user has selected a lab or entered a lab name */}
               {(selectedLabId || labName.trim()) && (

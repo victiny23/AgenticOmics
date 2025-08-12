@@ -113,6 +113,12 @@ public class LabService {
         return generateNextLabId();
     }
     
+    public boolean isUserMemberOfLab(Long userId, Long labId) {
+        Optional<UserLabMembership> membership = userLabMembershipRepository
+                .findByUserIdAndLabIdAndIsActiveTrue(userId, labId);
+        return membership.isPresent();
+    }
+    
     public UserLabMembership addUserToLab(Long userId, Long labId, String roleInLab, String memberId, Long supervisorId, Boolean isPrimaryLab) {
         // Check if user is already in this lab
         Optional<UserLabMembership> existingMembership = userLabMembershipRepository

@@ -78,7 +78,7 @@ const UserManagementPage: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('jwtToken');
-      const response = await fetch('http://localhost:12001/api/auth/admin/users/all-non-pi', {
+      const response = await fetch('http://localhost:12001/api/auth/admin/users/my-lab-members', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

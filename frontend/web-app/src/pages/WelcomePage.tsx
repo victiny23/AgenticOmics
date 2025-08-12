@@ -23,7 +23,7 @@ import LabHierarchy from '../components/LabHierarchy/LabHierarchy';
 
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, username, photoUrl } = useAuth();
+  const { isAuthenticated, username, photoUrl, getSecurePhotoUrl } = useAuth();
 
   const handleLogin = () => {
     navigate('/login');
@@ -72,7 +72,7 @@ const WelcomePage: React.FC = () => {
               {isAuthenticated ? (
                 <Avatar
                   sx={{ width: 32, height: 32 }}
-                  src={photoUrl ? (photoUrl.startsWith('http') ? photoUrl : `http://localhost:12001${photoUrl}`) : undefined}
+                  src={getSecurePhotoUrl(photoUrl) || undefined}
                 >
                   {!photoUrl && (username ? username.charAt(0) : 'U')}
                 </Avatar>

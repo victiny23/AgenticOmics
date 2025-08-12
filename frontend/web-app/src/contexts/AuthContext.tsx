@@ -11,6 +11,7 @@ interface AuthContextType {
   checkUserStatus: () => Promise<boolean>;
   setPhotoUrl: (url: string | null) => void;
   refreshProfile: () => Promise<void>;
+  getSecurePhotoUrl: (photoUrl: string | null) => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -143,22 +144,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const getSecurePhotoUrl = (photoUrl: string | null): string | null => {
+    if (!photoUrl) return null;
+    
+    // If it's already a full URL, return as is
+    if (photoUrl.startsWith('http')) {
+      return photoUrl;
+    }
+    
+    // Extract filename from the photo URL path
+    const filename = photoUrl.split('/').pop();
+    if (!filename) return null;
+    
+    // Return the secure endpoint URL
+    return `http://localhost:12001/api/auth/profile/photo/${filename}`;
+  };
+
   const refreshProfile = async () => {
     try {
       const token = localStorage.getItem('jwtToken');
       const currentUsername = localStorage.getItem('username');
       if (!token || !currentUsername) return;
+      
+      // Get basic profile info (non-sensitive)
       const res = await fetch('http://localhost:12001/api/auth/profile', {
         headers: { Authorization: `Bearer ${token}`, 'X-Username': currentUsername }
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.photoUrl) setPhotoUrlAndPersist(data.photoUrl);
         if (data.role) setRole(data.role);
         if (typeof data.isActive === 'boolean') {
           setIsActive(data.isActive);
           localStorage.setItem('isActive', data.isActive.toString());
         }
+      }
+      
+      // Get sensitive profile info (including photo URL)
+      const sensitiveRes = await fetch('http://localhost:12001/api/auth/profile/sensitive', {
+        headers: { Authorization: `Bearer ${token}`, 'X-Username': currentUsername }
+      });
+      if (sensitiveRes.ok) {
+        const sensitiveData = await sensitiveRes.json();
+        if (sensitiveData.photoUrl) setPhotoUrlAndPersist(sensitiveData.photoUrl);
       }
     } catch (e) {
       // ignore
@@ -182,6 +209,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkUserStatus,
     setPhotoUrl: setPhotoUrlAndPersist,
     refreshProfile,
+    getSecurePhotoUrl,
   };
 
   return (

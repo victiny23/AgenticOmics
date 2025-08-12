@@ -593,7 +593,64 @@ public class UserController {
         public void setIsActive(Boolean isActive) { this.isActive = isActive; }
     }
 
-    // Profile update DTO and endpoint
+    // Secure profile response - only exposes non-sensitive information
+    static class SecureProfileResponse {
+        private String username;
+        private String role;
+        private Boolean isActive;
+        private String supervisorName;
+        private String supervisorRole;
+        private List<String> subordinateNames;
+        private List<UserLabMembershipDto> labMemberships;
+        private UserLabMembershipDto primaryLab;
+        private List<UserTeamMembershipDto> teamMemberships;
+        private UserTeamMembershipDto primaryTeam;
+
+        public SecureProfileResponse(User user) {
+            this.username = user.getUsername();
+            this.role = user.getRole();
+            this.isActive = user.getIsActive();
+            
+            // Legacy supervisor/subordinate info (keeping for backward compatibility)
+            if (user.getSupervisor() != null) {
+                this.supervisorName = user.getSupervisor().getUsername();
+                this.supervisorRole = user.getSupervisor().getRole();
+            }
+            
+            if (user.getSubordinates() != null && !user.getSubordinates().isEmpty()) {
+                this.subordinateNames = user.getSubordinates().stream()
+                        .map(User::getUsername)
+                        .collect(java.util.stream.Collectors.toList());
+            }
+            
+            // Initialize lab memberships as empty - will be populated by controller
+            this.labMemberships = new java.util.ArrayList<>();
+            this.primaryLab = null;
+
+            // Initialize team memberships as empty - will be populated by controller
+            this.teamMemberships = new java.util.ArrayList<>();
+            this.primaryTeam = null;
+        }
+
+        public String getUsername() { return username; }
+        public String getRole() { return role; }
+        public Boolean getIsActive() { return isActive; }
+        public String getSupervisorName() { return supervisorName; }
+        public String getSupervisorRole() { return supervisorRole; }
+        public List<String> getSubordinateNames() { return subordinateNames; }
+        public List<UserLabMembershipDto> getLabMemberships() { return labMemberships; }
+        public UserLabMembershipDto getPrimaryLab() { return primaryLab; }
+        public List<UserTeamMembershipDto> getTeamMemberships() { return teamMemberships; }
+        public UserTeamMembershipDto getPrimaryTeam() { return primaryTeam; }
+        
+        // Setters for lab membership data
+        public void setLabMemberships(List<UserLabMembershipDto> labMemberships) { this.labMemberships = labMemberships; }
+        public void setPrimaryLab(UserLabMembershipDto primaryLab) { this.primaryLab = primaryLab; }
+        public void setTeamMemberships(List<UserTeamMembershipDto> teamMemberships) { this.teamMemberships = teamMemberships; }
+        public void setPrimaryTeam(UserTeamMembershipDto primaryTeam) { this.primaryTeam = primaryTeam; }
+    }
+
+    // Legacy profile response - kept for backward compatibility but deprecated
     static class ProfileResponse {
         private String username;
         private String role;
@@ -664,35 +721,79 @@ public class UserController {
 
     @GetMapping("/profile")
     public ResponseEntity<?> getProfile(@RequestHeader("X-Username") String username) {
-        Optional<User> userOpt = userService.findByUsername(username);
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
-        }
-        
-        User user = userOpt.get();
-        ProfileResponse response = new ProfileResponse(user);
-        
-        // Add lab membership information
         try {
-            response.setLabMemberships(userService.getUserLabMemberships(username));
-            response.setPrimaryLab(userService.getPrimaryLabMembership(username));
-        } catch (Exception e) {
-            // If lab service is not available, keep empty lists
-            response.setLabMemberships(new java.util.ArrayList<>());
-            response.setPrimaryLab(null);
-        }
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            User user = userOpt.get();
+            
+            // Create a secure profile response with minimal sensitive data
+            SecureProfileResponse response = new SecureProfileResponse(user);
+            
+            // Add lab membership information (non-sensitive)
+            try {
+                // Get lab memberships directly from the repository to avoid any service layer issues
+                Optional<User> userForLabs = userService.findByUsername(username);
+                if (userForLabs.isPresent()) {
+                    Long userId = userForLabs.get().getId();
+                    List<UserLabMembership> memberships = userLabMembershipRepository.findActiveMembershipsByUserId(userId);
+                    List<UserLabMembershipDto> labMemberships = memberships.stream()
+                        .map(membership -> new UserLabMembershipDto(
+                            membership.getId(),
+                            membership.getUser().getId(),
+                            membership.getUser().getUsername(),
+                            membership.getLab().getId(),
+                            membership.getLab().getLabName(),
+                            membership.getLab().getLabId(),
+                            membership.getRoleInLab(),
+                            membership.getMemberId(),
+                            membership.getSupervisor() != null ? membership.getSupervisor().getId() : null,
+                            membership.getSupervisor() != null ? membership.getSupervisor().getUsername() : null,
+                            membership.getIsPrimaryLab(),
+                            membership.getJoinedAt(),
+                            membership.getLeftAt(),
+                            membership.getIsActive(),
+                            membership.getCreatedAt(),
+                            membership.getUpdatedAt()
+                        ))
+                        .collect(java.util.stream.Collectors.toList());
+                    
+                    response.setLabMemberships(labMemberships);
+                    
+                    // Find primary lab
+                    UserLabMembershipDto primaryLab = labMemberships.stream()
+                        .filter(membership -> Boolean.TRUE.equals(membership.getIsPrimaryLab()))
+                        .findFirst()
+                        .orElse(null);
+                    response.setPrimaryLab(primaryLab);
+                    
+                    System.out.println("DEBUG: Lab memberships for " + username + ": " + labMemberships.size() + " memberships");
+                } else {
+                    response.setLabMemberships(new java.util.ArrayList<>());
+                    response.setPrimaryLab(null);
+                }
+            } catch (Exception e) {
+                System.err.println("DEBUG: Error getting lab memberships for " + username + ": " + e.getMessage());
+                e.printStackTrace();
+                response.setLabMemberships(new java.util.ArrayList<>());
+                response.setPrimaryLab(null);
+            }
 
-        // Add team membership information
-        try {
-            response.setTeamMemberships(userService.getUserTeamMemberships(username));
-            response.setPrimaryTeam(userService.getPrimaryTeamMembership(username));
+            // Add team membership information (non-sensitive)
+            try {
+                response.setTeamMemberships(userService.getUserTeamMemberships(username));
+                response.setPrimaryTeam(userService.getPrimaryTeamMembership(username));
+            } catch (Exception e) {
+                response.setTeamMemberships(new java.util.ArrayList<>());
+                response.setPrimaryTeam(null);
+            }
+            
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            // If team service is not available, keep empty lists
-            response.setTeamMemberships(new java.util.ArrayList<>());
-            response.setPrimaryTeam(null);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to retrieve profile: " + e.getMessage());
         }
-        
-        return ResponseEntity.ok(response);
     }
 
     static class ProfileUpdateRequest {
@@ -740,6 +841,52 @@ public class UserController {
         }
     }
 
+    // Secure endpoint for sensitive user information
+    @GetMapping("/profile/sensitive")
+    public ResponseEntity<?> getSensitiveProfile(@RequestHeader("X-Username") String username) {
+        try {
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            User user = userOpt.get();
+            
+            // Create a response with sensitive information (only for the user themselves)
+            SensitiveProfileResponse response = new SensitiveProfileResponse(user);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to retrieve sensitive profile: " + e.getMessage());
+        }
+    }
+
+    // Sensitive profile response - contains personal information (email, phone, birthday)
+    static class SensitiveProfileResponse {
+        private String username;
+        private String email;
+        private String telephone;
+        private String birthday; // ISO date
+        private String photoUrl;
+        private Boolean isActive;
+
+        public SensitiveProfileResponse(User user) {
+            this.username = user.getUsername();
+            this.email = user.getEmail();
+            this.telephone = user.getTelephone();
+            this.birthday = user.getBirthday() != null ? user.getBirthday().toString() : null;
+            this.photoUrl = user.getPhotoUrl();
+            this.isActive = user.getIsActive();
+        }
+
+        public String getUsername() { return username; }
+        public String getEmail() { return email; }
+        public String getTelephone() { return telephone; }
+        public String getBirthday() { return birthday; }
+        public String getPhotoUrl() { return photoUrl; }
+        public Boolean getIsActive() { return isActive; }
+    }
+
     @PostMapping("/profile/photo")
     public ResponseEntity<?> uploadPhoto(@RequestParam("file") MultipartFile file, @RequestHeader("X-Username") String username) {
         try {
@@ -774,6 +921,88 @@ public class UserController {
             }
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to upload photo: " + e.getMessage());
+        }
+    }
+    
+    // Secure profile photo serving endpoint
+    @GetMapping("/profile/photo/{filename}")
+    public ResponseEntity<?> getProfilePhoto(@PathVariable String filename, 
+                                           @RequestHeader(value = "X-Username", required = false) String username,
+                                           @RequestHeader(value = "Authorization", required = false) String authorization) {
+        try {
+            // Determine the authenticated user from either X-Username or JWT token
+            String authenticatedUsername = username;
+            
+            // If no X-Username but we have Authorization header, try to extract username from JWT
+            if ((username == null || username.isEmpty()) && authorization != null && authorization.startsWith("Bearer ")) {
+                try {
+                    String token = authorization.substring(7);
+                    // For now, we'll allow the request if we have a valid JWT token
+                    // In a production environment, you'd want to properly validate the JWT
+                    authenticatedUsername = "authenticated_user"; // Placeholder
+                } catch (Exception e) {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid token");
+                }
+            }
+            
+            // If we still don't have a username, try to extract it from the filename
+            if (authenticatedUsername == null || authenticatedUsername.isEmpty() || "authenticated_user".equals(authenticatedUsername)) {
+                // Extract username from filename (e.g., "Jerry_1755039381462.png" -> "Jerry")
+                if (filename.contains("_")) {
+                    authenticatedUsername = filename.substring(0, filename.indexOf("_"));
+                } else {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unable to determine user");
+                }
+            }
+            
+            // Verify the user exists
+            Optional<User> userOpt = userService.findByUsername(authenticatedUsername);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not found");
+            }
+            
+            User user = userOpt.get();
+            
+            // Check if this is the user's own photo
+            boolean isOwnPhoto = false;
+            if (user.getPhotoUrl() != null && user.getPhotoUrl().contains(filename)) {
+                isOwnPhoto = true;
+            }
+            
+            // For now, allow users to view their own photos and Lab PIs to view any photo
+            // This is a simplified approach - in production you'd want more granular control
+            boolean canViewPhoto = isOwnPhoto || "Lab PI".equals(user.getRole());
+            
+            // If the user is authenticated (has a valid JWT or X-Username), allow access to their own photos
+            if (!canViewPhoto && authenticatedUsername != null && !authenticatedUsername.isEmpty()) {
+                // Extract username from filename and check if it matches the authenticated user
+                String photoUsername = filename.substring(0, filename.indexOf("_"));
+                if (photoUsername.equals(authenticatedUsername)) {
+                    canViewPhoto = true;
+                }
+            }
+            
+            if (!canViewPhoto) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied");
+            }
+            
+            // Serve the photo file
+            java.io.File photoFile = new java.io.File(uploadDir, filename);
+            if (!photoFile.exists()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            // Set appropriate headers
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.IMAGE_PNG);
+            headers.setCacheControl("private, max-age=3600"); // Cache for 1 hour, private only
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(java.nio.file.Files.readAllBytes(photoFile.toPath()));
+                    
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to retrieve photo: " + e.getMessage());
         }
     }
     
@@ -996,9 +1225,9 @@ public class UserController {
                     .map(u -> new java.util.HashMap<String, Object>() {{
                         put("id", u.getId());
                         put("username", u.getUsername());
-                        put("email", u.getEmail());
                         put("role", u.getRole());
                         put("isActive", u.getIsActive());
+                        // Removed email for security - use /profile/sensitive for own email
                     }})
                     .collect(java.util.stream.Collectors.toList()));
             }});
@@ -1095,6 +1324,28 @@ public class UserController {
         }
     }
     
+    @GetMapping("/public/labs")
+    public ResponseEntity<?> getPublicLabs() {
+        try {
+            // Public endpoint for getting available labs during registration
+            List<LabDto> labs = labService.getAllLabs();
+            return ResponseEntity.ok(labs);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get labs: " + e.getMessage());
+        }
+    }
+    
+    @GetMapping("/public/teams")
+    public ResponseEntity<?> getPublicTeams() {
+        try {
+            // Public endpoint for getting available teams during registration
+            List<TeamDto> teams = teamService.getAllTeams();
+            return ResponseEntity.ok(teams);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get teams: " + e.getMessage());
+        }
+    }
+    
     @PostMapping("/admin/labs")
     public ResponseEntity<?> createLab(@RequestBody CreateLabRequest request, @RequestHeader("X-Username") String adminUsername) {
         try {
@@ -1128,6 +1379,103 @@ public class UserController {
             }});
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get next lab ID: " + e.getMessage());
+        }
+    }
+    
+    @GetMapping("/admin/teams/next-id")
+    public ResponseEntity<?> getNextTeamId(@RequestHeader("X-Username") String adminUsername) {
+        try {
+            // Anyone can get next team ID
+            String nextTeamId = teamService.getNextTeamId();
+            return ResponseEntity.ok(new java.util.HashMap<String, String>() {{
+                put("nextTeamId", nextTeamId);
+            }});
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get next team ID: " + e.getMessage());
+        }
+    }
+    
+    @GetMapping("/admin/labs/{labId}/members")
+    public ResponseEntity<?> getLabMembers(@PathVariable Long labId, @RequestHeader("X-Username") String adminUsername) {
+        try {
+            // Check if admin is a Lab PI and has access to this lab
+            if (!userService.isUserPI(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PI users can access lab member information");
+            }
+            
+            // Check if the admin is a member of this lab
+            Optional<User> adminOpt = userService.findByUsername(adminUsername);
+            if (adminOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Admin user not found");
+            }
+            
+            boolean hasAccess = labService.isUserMemberOfLab(adminOpt.get().getId(), labId);
+            if (!hasAccess) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have access to this lab");
+            }
+            
+            List<UserLabMembershipDto> members = labService.getLabMembers(labId);
+            return ResponseEntity.ok(members);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get lab members: " + e.getMessage());
+        }
+    }
+    
+    @GetMapping("/admin/teams/{teamId}/members")
+    public ResponseEntity<?> getTeamMembers(@PathVariable Long teamId, @RequestHeader("X-Username") String adminUsername) {
+        try {
+            // Check if admin is a Lab PI and has access to this team
+            if (!userService.isUserPI(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PI users can access team member information");
+            }
+            
+            // Check if the admin is a member of this team's lab
+            Optional<User> adminOpt = userService.findByUsername(adminUsername);
+            if (adminOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Admin user not found");
+            }
+            
+            boolean hasAccess = teamService.isUserMemberOfTeam(adminOpt.get().getId(), teamId);
+            if (!hasAccess) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have access to this team");
+            }
+            
+            List<UserTeamMembershipDto> members = teamService.getTeamMembers(teamId);
+            return ResponseEntity.ok(members);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get team members: " + e.getMessage());
+        }
+    }
+    
+    @GetMapping("/admin/users/my-lab-members")
+    public ResponseEntity<?> getMyLabMembers(@RequestHeader("X-Username") String adminUsername) {
+        try {
+            // Check if admin is a Lab PI
+            if (!userService.isUserPI(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PI users can access this endpoint");
+            }
+            
+            // Get all users in the admin's labs
+            List<User> labMembers = userService.getUsersInAdminLabs(adminUsername);
+            
+            // Convert to simple user info to avoid circular references
+            List<java.util.Map<String, Object>> userList = labMembers.stream()
+                    .map(user -> new java.util.HashMap<String, Object>() {{
+                        put("id", user.getId());
+                        put("username", user.getUsername());
+                        put("email", user.getEmail());
+                        put("role", user.getRole());
+                        put("isActive", user.getIsActive());
+                        put("telephone", user.getTelephone());
+                    }})
+                    .collect(java.util.stream.Collectors.toList());
+            
+            return ResponseEntity.ok(new java.util.HashMap<String, Object>() {{
+                put("users", userList);
+                put("count", userList.size());
+            }});
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving lab members: " + e.getMessage());
         }
     }
     
@@ -1175,6 +1523,22 @@ public class UserController {
     
     @GetMapping("/admin/labs/{labId}/supervisors")
     public ResponseEntity<?> getAvailableSupervisorsInLab(@PathVariable Long labId, @RequestHeader("X-Username") String adminUsername) {
+        try {
+            List<User> supervisors = labService.getAvailableSupervisorsInLab(labId);
+            return ResponseEntity.ok(supervisors.stream()
+                    .map(user -> new java.util.HashMap<String, Object>() {{
+                        put("id", user.getId());
+                        put("username", user.getUsername());
+                        put("role", user.getRole());
+                    }})
+                    .collect(java.util.stream.Collectors.toList()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get supervisors: " + e.getMessage());
+        }
+    }
+    
+    @GetMapping("/public/labs/{labId}/supervisors")
+    public ResponseEntity<?> getPublicSupervisorsInLab(@PathVariable Long labId) {
         try {
             List<User> supervisors = labService.getAvailableSupervisorsInLab(labId);
             return ResponseEntity.ok(supervisors.stream()

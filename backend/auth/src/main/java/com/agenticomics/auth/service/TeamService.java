@@ -239,6 +239,19 @@ public class TeamService {
         }
     }
     
+    /**
+     * Public method to get the next team ID
+     */
+    public String getNextTeamId() {
+        return generateNextTeamId();
+    }
+    
+    public boolean isUserMemberOfTeam(Long userId, Long teamId) {
+        Optional<UserTeamMembership> membership = userTeamMembershipRepository
+                .findByUserIdAndTeamIdAndIsActiveTrue(userId, teamId);
+        return membership.isPresent();
+    }
+    
     private TeamDto convertToDto(Team team) {
         return new TeamDto(
                 team.getId(),

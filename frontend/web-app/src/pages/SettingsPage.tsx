@@ -44,7 +44,7 @@ interface UserLabMembershipDto {
   username: string;
   labId: number;
   labName: string;
-  labIdCode: string;
+  labCode: string;
   roleInLab: string;
   memberId: string;
   supervisorId?: number;
@@ -106,16 +106,25 @@ const SettingsPage: React.FC = () => {
     const loadProfile = async () => {
       try {
         const token = localStorage.getItem('jwtToken')
+        // Load non-sensitive profile data
         const res = await fetch('http://localhost:12001/api/auth/profile', {
           headers: { Authorization: `Bearer ${token}`, 'X-Username': username || '' }
         })
         if (res.ok) {
           const data = await res.json()
-          setEmail(data.email || '')
-          setTelephone(data.telephone || '')
-          setBirthday(data.birthday || '')
-          setPhotoUrl(data.photoUrl || '')
           setProfile(data)
+        }
+        
+        // Load sensitive profile data
+        const sensitiveRes = await fetch('http://localhost:12001/api/auth/profile/sensitive', {
+          headers: { Authorization: `Bearer ${token}`, 'X-Username': username || '' }
+        })
+        if (sensitiveRes.ok) {
+          const sensitiveData = await sensitiveRes.json()
+          setEmail(sensitiveData.email || '')
+          setTelephone(sensitiveData.telephone || '')
+          setBirthday(sensitiveData.birthday || '')
+          setPhotoUrl(sensitiveData.photoUrl || '')
         }
       } catch {}
     }
@@ -277,7 +286,7 @@ const SettingsPage: React.FC = () => {
                             {profile.primaryLab.labName}
                           </Typography>
                           <Chip
-                            label={`${profile.primaryLab.labIdCode} • ${profile.primaryLab.roleInLab}`}
+                            label={`${profile.primaryLab.labCode} • ${profile.primaryLab.roleInLab}`}
                             color={getRoleColor(profile.primaryLab.roleInLab) as any}
                             size="small"
                             icon={<Star />}
@@ -331,7 +340,7 @@ const SettingsPage: React.FC = () => {
                           </ListItemAvatar>
                           <ListItemText
                             primary={membership.labName}
-                            secondary={`${membership.labIdCode} • ${membership.roleInLab}${membership.isPrimaryLab ? ' • Primary' : ''}`}
+                            secondary={`${membership.labCode} • ${membership.roleInLab}${membership.isPrimaryLab ? ' • Primary' : ''}`}
                           />
                         </ListItem>
                       ))}

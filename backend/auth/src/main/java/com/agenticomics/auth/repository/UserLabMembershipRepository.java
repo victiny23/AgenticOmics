@@ -30,4 +30,7 @@ public interface UserLabMembershipRepository extends JpaRepository<UserLabMember
     
     @Query("SELECT ulm FROM UserLabMembership ulm WHERE ulm.user.id = :userId AND ulm.isPrimaryLab = true AND ulm.isActive = true")
     Optional<UserLabMembership> findPrimaryLabMembershipByUserId(@Param("userId") Long userId);
+    
+    @Query("SELECT ulm FROM UserLabMembership ulm WHERE ulm.lab.id IN :labIds AND ulm.isActive = true")
+    List<UserLabMembership> findByLabIdInAndIsActiveTrue(@Param("labIds") List<Long> labIds);
 } 

@@ -61,7 +61,7 @@ interface UserLabMembershipDto {
   username: string;
   labId: number;
   labName: string;
-  labIdCode: string;
+  labCode: string;
   roleInLab: string;
   memberId: string;
   supervisorId?: number;
@@ -151,15 +151,23 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
     id: '',
   });
   const [nextLabId, setNextLabId] = useState<string>('');
+  const [nextTeamId, setNextTeamId] = useState<string>('');
   const [loadingNextId, setLoadingNextId] = useState(false);
+  const [labMembers, setLabMembers] = useState<{[key: number]: any[]}>({});
+  const [teamMembers, setTeamMembers] = useState<{[key: number]: any[]}>({});
+  const [loadingMembers, setLoadingMembers] = useState<{[key: string]: boolean}>({});
 
   useEffect(() => {
     fetchProfile();
   }, [username]);
 
   useEffect(() => {
-    if (createDialogOpen && createType === 'lab') {
-      fetchNextLabId();
+    if (createDialogOpen) {
+      if (createType === 'lab') {
+        fetchNextLabId();
+      } else if (createType === 'team') {
+        fetchNextTeamId();
+      }
     }
   }, [createDialogOpen, createType]);
 
@@ -200,6 +208,62 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
     }
   };
 
+  const fetchNextTeamId = async () => {
+    try {
+      setLoadingNextId(true);
+      const token = localStorage.getItem('jwtToken');
+      const response = await axios.get('http://localhost:12001/api/auth/admin/teams/next-id', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      setNextTeamId(response.data.nextTeamId);
+      setCreateForm(prev => ({ ...prev, id: response.data.nextTeamId }));
+    } catch (err: any) {
+      console.error('Failed to fetch next team ID:', err);
+      setNextTeamId('TEAM001'); // Fallback
+      setCreateForm(prev => ({ ...prev, id: 'TEAM001' }));
+    } finally {
+      setLoadingNextId(false);
+    }
+  };
+
+  const fetchLabMembers = async (labId: number) => {
+    try {
+      setLoadingMembers(prev => ({ ...prev, [`lab-${labId}`]: true }));
+      const token = localStorage.getItem('jwtToken');
+      const response = await axios.get(`http://localhost:12001/api/auth/admin/labs/${labId}/members`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      setLabMembers(prev => ({ ...prev, [labId]: response.data }));
+    } catch (err: any) {
+      console.error('Failed to fetch lab members:', err);
+      setLabMembers(prev => ({ ...prev, [labId]: [] }));
+    } finally {
+      setLoadingMembers(prev => ({ ...prev, [`lab-${labId}`]: false }));
+    }
+  };
+
+  const fetchTeamMembers = async (teamId: number) => {
+    try {
+      setLoadingMembers(prev => ({ ...prev, [`team-${teamId}`]: true }));
+      const token = localStorage.getItem('jwtToken');
+      const response = await axios.get(`http://localhost:12001/api/auth/admin/teams/${teamId}/members`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      setTeamMembers(prev => ({ ...prev, [teamId]: response.data }));
+    } catch (err: any) {
+      console.error('Failed to fetch team members:', err);
+      setTeamMembers(prev => ({ ...prev, [teamId]: [] }));
+    } finally {
+      setLoadingMembers(prev => ({ ...prev, [`team-${teamId}`]: false }));
+    }
+  };
+
   const handleCreateOrganization = async () => {
     try {
       const token = localStorage.getItem('jwtToken');
@@ -226,6 +290,7 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
       setCreateDialogOpen(false);
       setCreateForm({ name: '', description: '', id: '' });
       setNextLabId('');
+      setNextTeamId('');
       fetchProfile(); // Refresh data
     } catch (err: any) {
       setError(err.response?.data || 'Failed to create organization');
@@ -338,7 +403,7 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
               />
               {profile.primaryLab && (
                 <Chip
-                  label={`${profile.primaryLab.labName} (${profile.primaryLab.labIdCode})`}
+                  label={`${profile.primaryLab.labName} (${profile.primaryLab.labCode})`}
                   variant="outlined"
                   size="small"
                   icon={<Star />}
@@ -403,7 +468,7 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
                             {membership.labName}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {membership.labIdCode} • {membership.roleInLab}
+                            {membership.labCode} • {membership.roleInLab}
                             {membership.memberId && ` • ID: ${membership.memberId}`}
                             {membership.isPrimaryLab && ' • Primary Lab'}
                           </Typography>
@@ -414,7 +479,7 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
                       <Grid container spacing={2}>
                         <Grid item xs={12} sm={6}>
                           <Typography variant="body2" color="text.secondary">
-                            <strong>Lab:</strong> {membership.labName} ({membership.labIdCode})
+                            <strong>Lab:</strong> {membership.labName} ({membership.labCode})
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
                             <strong>Role:</strong> {membership.roleInLab}
@@ -437,6 +502,63 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
                           <Typography variant="body2" color="text.secondary">
                             <strong>Status:</strong> {membership.isActive ? 'Active' : 'Inactive'}
                           </Typography>
+                        </Grid>
+                        
+                        {/* Lab Members Section */}
+                        <Grid item xs={12}>
+                          <Divider sx={{ my: 2 }} />
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                            <Typography variant="h6" sx={{ mr: 1 }}>
+                              Lab Members
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => fetchLabMembers(membership.labId)}
+                              disabled={loadingMembers[`lab-${membership.labId}`]}
+                              startIcon={loadingMembers[`lab-${membership.labId}`] ? <CircularProgress size={16} /> : <Group />}
+                            >
+                              {labMembers[membership.labId] ? 'Refresh Members' : 'View Members'}
+                            </Button>
+                          </Box>
+                          
+                          {loadingMembers[`lab-${membership.labId}`] ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                              <CircularProgress size={24} />
+                            </Box>
+                          ) : labMembers[membership.labId] ? (
+                            <List dense>
+                              {labMembers[membership.labId].map((member: any, memberIndex: number) => (
+                                <ListItem key={memberIndex} sx={{ pl: 0 }}>
+                                  <ListItemAvatar>
+                                    <Avatar sx={{ bgcolor: member.isPrimaryLab ? 'primary.main' : 'grey.300' }}>
+                                      {member.isPrimaryLab ? <Star /> : <Person />}
+                                    </Avatar>
+                                  </ListItemAvatar>
+                                  <ListItemText
+                                    primary={member.username}
+                                    secondary={
+                                      <Box>
+                                        <Typography variant="caption" display="block">
+                                          Role: {member.roleInLab}
+                                          {member.memberId && ` • ID: ${member.memberId}`}
+                                          {member.isPrimaryLab && ' • Primary Lab'}
+                                        </Typography>
+                                        <Typography variant="caption" display="block" color="text.secondary">
+                                          Joined: {new Date(member.joinedAt).toLocaleDateString()}
+                                          {member.supervisorUsername && ` • Supervisor: ${member.supervisorUsername}`}
+                                        </Typography>
+                                      </Box>
+                                    }
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', textAlign: 'center', py: 2 }}>
+                              Click "View Members" to see lab members
+                            </Typography>
+                          )}
                         </Grid>
                       </Grid>
                     </AccordionDetails>
@@ -499,6 +621,63 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
                             <strong>Status:</strong> {membership.isActive ? 'Active' : 'Inactive'}
                           </Typography>
                         </Grid>
+                        
+                        {/* Team Members Section */}
+                        <Grid item xs={12}>
+                          <Divider sx={{ my: 2 }} />
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                            <Typography variant="h6" sx={{ mr: 1 }}>
+                              Team Members
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => fetchTeamMembers(membership.teamId)}
+                              disabled={loadingMembers[`team-${membership.teamId}`]}
+                              startIcon={loadingMembers[`team-${membership.teamId}`] ? <CircularProgress size={16} /> : <Group />}
+                            >
+                              {teamMembers[membership.teamId] ? 'Refresh Members' : 'View Members'}
+                            </Button>
+                          </Box>
+                          
+                          {loadingMembers[`team-${membership.teamId}`] ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                              <CircularProgress size={24} />
+                            </Box>
+                          ) : teamMembers[membership.teamId] ? (
+                            <List dense>
+                              {teamMembers[membership.teamId].map((member: any, memberIndex: number) => (
+                                <ListItem key={memberIndex} sx={{ pl: 0 }}>
+                                  <ListItemAvatar>
+                                    <Avatar sx={{ bgcolor: member.isPrimaryTeam ? 'secondary.main' : 'grey.300' }}>
+                                      {member.isPrimaryTeam ? <Star /> : <Person />}
+                                    </Avatar>
+                                  </ListItemAvatar>
+                                  <ListItemText
+                                    primary={member.username}
+                                    secondary={
+                                      <Box>
+                                        <Typography variant="caption" display="block">
+                                          Role: {member.roleInTeam}
+                                          {member.memberId && ` • ID: ${member.memberId}`}
+                                          {member.isPrimaryTeam && ' • Primary Team'}
+                                        </Typography>
+                                        <Typography variant="caption" display="block" color="text.secondary">
+                                          Joined: {new Date(member.joinedAt).toLocaleDateString()}
+                                          {member.supervisorUsername && ` • Supervisor: ${member.supervisorUsername}`}
+                                        </Typography>
+                                      </Box>
+                                    }
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', textAlign: 'center', py: 2 }}>
+                              Click "View Members" to see team members
+                            </Typography>
+                          )}
+                        </Grid>
                       </Grid>
                     </AccordionDetails>
                   </Accordion>
@@ -528,7 +707,7 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
             {profile.primaryLab && (
               <Grid item xs={12}>
                 <Typography variant="caption" color="text.secondary">
-                  Primary Lab: {profile.primaryLab.labName} ({profile.primaryLab.labIdCode})
+                  Primary Lab: {profile.primaryLab.labName} ({profile.primaryLab.labCode})
                 </Typography>
               </Grid>
             )}
@@ -544,14 +723,14 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
 
         {/* Create Organization Dialog */}
         <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
-          {createType === 'lab' && createDialogOpen && (
+          {createDialogOpen && (
             <Box sx={{ position: 'absolute', top: 0, right: 0, p: 1 }}>
               {loadingNextId ? (
                 <CircularProgress size={20} />
               ) : (
                 <Button
                   size="small"
-                  onClick={fetchNextLabId}
+                  onClick={createType === 'lab' ? fetchNextLabId : fetchNextTeamId}
                   disabled={loadingNextId}
                 >
                   Refresh ID
@@ -590,12 +769,12 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
                 <TextField
                   fullWidth
                   label="Team ID (Auto-generated)"
-                  value="Will be auto-generated"
+                  value={nextTeamId || 'Loading...'}
                   sx={{ mb: 2 }}
                   InputProps={{
                     readOnly: true,
                   }}
-                  helperText="Team ID will be automatically generated (TEAM001, TEAM002, etc.)"
+                  helperText="This ID is automatically generated and cannot be changed"
                 />
               )}
               <TextField
