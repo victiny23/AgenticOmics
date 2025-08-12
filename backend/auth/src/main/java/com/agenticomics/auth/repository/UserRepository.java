@@ -68,4 +68,32 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findUserByTelephone(@Param("telephone") String telephone);
     
     void deleteByUsername(String username);
+    
+    // Supervisor relationship methods
+    @Query("SELECT u FROM User u WHERE u.supervisor.id = :supervisorId AND u.isActive = true")
+    List<User> findActiveSubordinatesBySupervisorId(@Param("supervisorId") Long supervisorId);
+    
+    @Query("SELECT u FROM User u WHERE u.supervisor.username = :supervisorUsername AND u.isActive = true")
+    List<User> findActiveSubordinatesBySupervisorUsername(@Param("supervisorUsername") String supervisorUsername);
+    
+    @Query("SELECT u FROM User u WHERE u.supervisor IS NULL AND u.role = 'Lab PI' AND u.isActive = true")
+    List<User> findActivePIsWithoutSupervisor();
+    
+    @Query("SELECT u FROM User u WHERE u.supervisor IS NOT NULL AND u.isActive = true")
+    List<User> findActiveUsersWithSupervisor();
+    
+    @Query("SELECT u FROM User u WHERE u.supervisor IS NULL AND u.isActive = true")
+    List<User> findActiveUsersWithoutSupervisor();
+    
+    @Query("SELECT u FROM User u WHERE u.supervisor.id = :supervisorId")
+    List<User> findAllSubordinatesBySupervisorId(@Param("supervisorId") Long supervisorId);
+    
+    @Query("SELECT u FROM User u WHERE u.supervisor.username = :supervisorUsername")
+    List<User> findAllSubordinatesBySupervisorUsername(@Param("supervisorUsername") String supervisorUsername);
+    
+    @Query("SELECT COUNT(u) FROM User u WHERE u.supervisor.id = :supervisorId AND u.isActive = true")
+    long countActiveSubordinatesBySupervisorId(@Param("supervisorId") Long supervisorId);
+    
+    @Query("SELECT COUNT(u) FROM User u WHERE u.supervisor.username = :supervisorUsername AND u.isActive = true")
+    long countActiveSubordinatesBySupervisorUsername(@Param("supervisorUsername") String supervisorUsername);
 } 

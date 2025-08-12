@@ -22,6 +22,21 @@ const LoginPage: React.FC = () => {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [loginMethod, setLoginMethod] = useState<'username' | 'telephone'>('username');
   const [role, setRole] = useState('');
+  
+  // New lab membership fields
+  const [labName, setLabName] = useState('');
+  const [roleInLab, setRoleInLab] = useState('');
+  const [memberId, setMemberId] = useState('');
+  const [supervisorUsername, setSupervisorUsername] = useState('');
+  const [isPrimaryLab, setIsPrimaryLab] = useState<boolean | null>(true);
+  
+  // New state for lab selection and supervisors
+  const [availableLabs, setAvailableLabs] = useState<Array<{id: number, labName: string, labId: string}>>([]);
+  const [availableSupervisors, setAvailableSupervisors] = useState<Array<{id: number, username: string, role: string}>>([]);
+  const [selectedLabId, setSelectedLabId] = useState<number | null>(null);
+  const [isLoadingLabs, setIsLoadingLabs] = useState(false);
+  const [isLoadingSupervisors, setIsLoadingSupervisors] = useState(false);
+  
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
@@ -34,6 +49,18 @@ const LoginPage: React.FC = () => {
     'Data Analyst',
     'Technician',
     'Professor'
+  ];
+
+  // Lab role options
+  const labRoleOptions = [
+    'Lab PI',
+    'PhD Student',
+    'Master Student',
+    'Postdoc',
+    'Research Assistant',
+    'Technician',
+    'Data Analyst',
+    'Visiting Scholar'
   ];
 
   // Check if we should show register form based on navigation state
@@ -51,6 +78,62 @@ const LoginPage: React.FC = () => {
       setIsForgotPassword(false);
     }
   }, [location.state]);
+
+  // Load available labs when registration form is shown
+  useEffect(() => {
+    if (isRegister) {
+      loadAvailableLabs();
+    }
+  }, [isRegister]);
+
+  // Load supervisors when lab is selected
+  useEffect(() => {
+    if (selectedLabId) {
+      loadAvailableSupervisors(selectedLabId);
+    } else {
+      setAvailableSupervisors([]);
+    }
+  }, [selectedLabId]);
+
+  const loadAvailableLabs = async () => {
+    try {
+      setIsLoadingLabs(true);
+      const response = await axios.get('http://localhost:12001/api/auth/admin/labs', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('jwtToken') || 'guest'}`,
+        },
+      });
+      setAvailableLabs(response.data || []);
+    } catch (error) {
+      console.log('Could not load labs, will allow manual entry');
+      setAvailableLabs([]);
+    } finally {
+      setIsLoadingLabs(false);
+    }
+  };
+
+  const loadAvailableSupervisors = async (labId: number) => {
+    try {
+      setIsLoadingSupervisors(true);
+      const response = await axios.get(`http://localhost:12001/api/auth/admin/labs/${labId}/supervisors`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('jwtToken') || 'guest'}`,
+        },
+      });
+      setAvailableSupervisors(response.data || []);
+    } catch (error) {
+      console.log('Could not load supervisors for this lab');
+      setAvailableSupervisors([]);
+    } finally {
+      setIsLoadingSupervisors(false);
+    }
+  };
+
+  const handleLabSelection = (labId: number | null, labName: string) => {
+    setSelectedLabId(labId);
+    setLabName(labName);
+    setSupervisorUsername(''); // Reset supervisor when lab changes
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,6 +193,11 @@ const LoginPage: React.FC = () => {
       setError('Please select a role.');
       return;
     }
+    // Lab-related validation - only required if user has selected a lab or entered a lab name
+    if ((selectedLabId || labName.trim()) && !roleInLab) {
+      setError('Please select your role in the lab.');
+      return;
+    }
     try {
       const registerData: any = {
         username,
@@ -118,9 +206,29 @@ const LoginPage: React.FC = () => {
         role,
       };
       
+      // Only include lab-related data if user has selected a lab or entered a lab name
+      if (selectedLabId || labName.trim()) {
+        registerData.labName = labName.trim();
+        registerData.roleInLab = roleInLab;
+        // Only include isPrimaryLab if it's not null
+        if (isPrimaryLab !== null) {
+          registerData.isPrimaryLab = isPrimaryLab;
+        }
+      }
+      
       // Only include telephone if it's not empty
       if (telephoneReg && telephoneReg.trim() !== '') {
         registerData.telephone = telephoneReg.trim();
+      }
+      
+      // Only include memberId if it's not empty
+      if (memberId && memberId.trim() !== '') {
+        registerData.memberId = memberId.trim();
+      }
+      
+      // Only include supervisorUsername if it's not empty
+      if (supervisorUsername && supervisorUsername.trim() !== '') {
+        registerData.supervisorUsername = supervisorUsername.trim();
       }
       
       await axios.post('http://localhost:12001/api/auth/register', registerData);
@@ -132,6 +240,12 @@ const LoginPage: React.FC = () => {
       setEmail('');
       setTelephoneReg('');
       setRole('');
+      setLabName('');
+      setRoleInLab('');
+      setMemberId('');
+      setSupervisorUsername('');
+      setIsPrimaryLab(true);
+      setSelectedLabId(null);
     } catch (err: any) {
       if (err.response && err.response.data) {
         // Extract specific error message from backend
@@ -438,6 +552,131 @@ const LoginPage: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
+              
+              {/* Lab Information Section */}
+              <Typography variant="h6" sx={{ mt: 3, mb: 2, color: '#1e3c72', fontWeight: 600 }}>
+                Lab Information (Optional)
+              </Typography>
+              
+              {isLoadingLabs ? (
+                <Typography>Loading labs...</Typography>
+              ) : (
+                <FormControl fullWidth margin="normal">
+                  <InputLabel>Select Existing Lab (Optional)</InputLabel>
+                  <Select
+                    value={selectedLabId || ''}
+                    label="Select Existing Lab (Optional)"
+                    onChange={(e) => {
+                      const labId = Number(e.target.value);
+                      if (labId === 0) {
+                        // "No Lab" option selected
+                        setSelectedLabId(null);
+                        setLabName('');
+                        setSupervisorUsername('');
+                      } else {
+                        const selectedLab = availableLabs.find(lab => lab.id === labId);
+                        handleLabSelection(labId, selectedLab?.labName || '');
+                      }
+                    }}
+                  >
+                    <MenuItem value={0}>
+                      <em>No Lab - I'm an independent researcher</em>
+                    </MenuItem>
+                    {availableLabs.map((lab) => (
+                      <MenuItem key={lab.id} value={lab.id}>
+                        {lab.labName} ({lab.labId})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+              
+              {/* Lab Name (if not selected from dropdown and user wants to create/join a lab) */}
+              {!selectedLabId && (
+                <TextField
+                  label="Lab Name (Optional - for new lab or existing lab not in list)"
+                  value={labName}
+                  onChange={e => setLabName(e.target.value)}
+                  fullWidth
+                  margin="normal"
+                  placeholder="e.g., Omics Research Lab (leave empty if no lab)"
+                  helperText="Enter lab name if you want to create a new lab or join an existing lab not listed above"
+                />
+              )}
+              
+              {/* Role in Lab - Only show if user has selected a lab or entered a lab name */}
+              {(selectedLabId || labName.trim()) && (
+                <FormControl fullWidth margin="normal" required>
+                  <InputLabel>Role in Lab</InputLabel>
+                  <Select
+                    value={roleInLab}
+                    label="Role in Lab"
+                    onChange={(e) => setRoleInLab(e.target.value)}
+                  >
+                    {labRoleOptions.map((roleOption) => (
+                      <MenuItem key={roleOption} value={roleOption}>
+                        {roleOption}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+              
+              {/* Member ID (if not selected from dropdown) */}
+              {!selectedLabId && (
+                <TextField
+                  label="Member ID (Optional)"
+                  value={memberId}
+                  onChange={e => setMemberId(e.target.value)}
+                  fullWidth
+                  margin="normal"
+                  placeholder="e.g., LAB001, Student ID"
+                />
+              )}
+              
+                             {/* Supervisor Selection */}
+               {selectedLabId && (
+                 <FormControl fullWidth margin="normal">
+                   <InputLabel>Supervisor (Optional)</InputLabel>
+                   <Select
+                     value={supervisorUsername || ''}
+                     label="Supervisor (Optional)"
+                     onChange={(e) => setSupervisorUsername(e.target.value)}
+                   >
+                     <MenuItem value="">
+                       <em>None - I am a Lab PI or independent researcher</em>
+                     </MenuItem>
+                     {availableSupervisors.map((supervisor) => (
+                       <MenuItem key={supervisor.id} value={supervisor.username}>
+                         {supervisor.username} ({supervisor.role})
+                       </MenuItem>
+                     ))}
+                   </Select>
+                 </FormControl>
+               )}
+              
+              {/* Primary Lab - Only show if user has selected a lab or entered a lab name */}
+              {(selectedLabId || labName.trim()) && (
+                <FormControl fullWidth margin="normal">
+                  <InputLabel>Primary Lab</InputLabel>
+                  <Select
+                    value={isPrimaryLab === null ? 'none' : (isPrimaryLab ? 'true' : 'false')}
+                    label="Primary Lab"
+                    onChange={(e) => {
+                      if (e.target.value === 'none') {
+                        setIsPrimaryLab(null);
+                      } else {
+                        setIsPrimaryLab(e.target.value === 'true');
+                      }
+                    }}
+                  >
+                    <MenuItem value="none">None - I don't have a primary lab</MenuItem>
+                    <MenuItem value="true">Yes - This is my primary lab</MenuItem>
+                    <MenuItem value="false">No - I belong to multiple labs</MenuItem>
+                  </Select>
+                </FormControl>
+              )}
+              
               <TextField
                 label="Password"
                 type="password"

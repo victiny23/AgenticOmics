@@ -31,6 +31,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import LabHierarchy from '../components/LabHierarchy/LabHierarchy';
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -106,6 +107,16 @@ const DashboardPage: React.FC = () => {
               <Typography variant="h5" sx={{ mb: 3, opacity: 0.9 }}>
                 Ready to continue your omics analysis journey?
               </Typography>
+              {role === 'Lab PI' && (
+                <Box sx={{ mb: 3, p: 2, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2 }}>
+                  <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
+                    🏢 Your Research Team
+                  </Typography>
+                  <Typography variant="body1" sx={{ opacity: 0.9 }}>
+                    You are leading a team of researchers. Click "Manage Team Members" below to view and manage your team.
+                  </Typography>
+                </Box>
+              )}
               <Typography variant="body1" sx={{ mb: 3, fontSize: '1.1rem', opacity: 0.8 }}>
                 Transform your experimental data into meaningful insights with our intuitive, 
                 AI-powered platform designed for researchers, graduate students, and lab technicians.
@@ -202,7 +213,7 @@ const DashboardPage: React.FC = () => {
       {/* Platform Capabilities and Recent Activity */}
       <Grid container spacing={4}>
         {/* Platform Capabilities */}
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12} md={6}>
           <Card sx={{ height: '100%' }}>
             <CardContent sx={{ p: 3 }}>
               <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
@@ -225,8 +236,34 @@ const DashboardPage: React.FC = () => {
           </Card>
         </Grid>
 
-        {/* Recent Activity */}
-        <Grid item xs={12} md={4}>
+        {/* Team & Organization */}
+        <Grid item xs={12} md={6}>
+          <LabHierarchy username={username || ''} />
+          {role === 'Lab PI' && (
+            <Box sx={{ mt: 2 }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => navigate('/admin/users')}
+                sx={{
+                  borderColor: '#1976d2',
+                  color: '#1976d2',
+                  '&:hover': {
+                    borderColor: '#1565c0',
+                    backgroundColor: 'rgba(25, 118, 210, 0.04)',
+                  }
+                }}
+              >
+                Manage Team Members
+              </Button>
+            </Box>
+          )}
+        </Grid>
+      </Grid>
+
+      {/* Recent Activity */}
+      <Grid container spacing={4} sx={{ mt: 2 }}>
+        <Grid item xs={12}>
           <Card sx={{ height: '100%' }}>
             <CardContent sx={{ p: 3 }}>
               <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>

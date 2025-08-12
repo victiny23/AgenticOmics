@@ -8,7 +8,8 @@ import {
   Stack,
   AppBar,
   Toolbar,
-  IconButton
+  IconButton,
+  Grid
 } from '@mui/material';
 import { 
   Science, 
@@ -18,6 +19,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import LabHierarchy from '../components/LabHierarchy/LabHierarchy';
 
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -339,8 +341,22 @@ const WelcomePage: React.FC = () => {
                           </Box>
             </Stack>
           </Box>
-                  </Paper>
-        </Box>
+
+          {/* Team & Organization for authenticated users */}
+          {isAuthenticated && username && (
+            <Box sx={{ mt: 4 }}>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={8}>
+                  {/* Main content area */}
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <LabHierarchy username={username} />
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </Paper>
+      </Box>
   );
 };
 

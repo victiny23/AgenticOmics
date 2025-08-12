@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -32,13 +33,10 @@ public class User {
     private String telephone;
     
     @Column(name = "role")
-    private String role;
+    private String role; // Global role (can be overridden by lab-specific roles)
 
     @Column(name = "birthday")
     private LocalDate birthday;
-
-    @Column(name = "student_id", unique = true)
-    private String studentId;
 
     @Column(name = "photo_url")
     private String photoUrl;
@@ -60,6 +58,22 @@ public class User {
     
     @Column(name = "is_active")
     private Boolean isActive = true;
+    
+    // Lab memberships (many-to-many relationship)
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<UserLabMembership> labMemberships;
+    
+    // Team memberships (many-to-many relationship)
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<UserTeamMembership> teamMemberships;
+    
+    // Legacy supervisor-subordinate relationships (keeping for backward compatibility)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supervisor_id")
+    private User supervisor;
+    
+    @OneToMany(mappedBy = "supervisor", fetch = FetchType.LAZY)
+    private List<User> subordinates;
     
     @PrePersist
     protected void onCreate() {
