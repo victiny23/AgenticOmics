@@ -5,7 +5,11 @@ import {
   Button, 
   Paper,
   Avatar,
-  Stack
+  Stack,
+  AppBar,
+  Toolbar,
+  IconButton,
+  Grid
 } from '@mui/material';
 import { 
   Science, 
@@ -14,9 +18,12 @@ import {
   AutoAwesome
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import LabHierarchy from '../components/LabHierarchy/LabHierarchy';
 
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, username, photoUrl, getSecurePhotoUrl } = useAuth();
 
   const handleLogin = () => {
     navigate('/login');
@@ -32,13 +39,12 @@ const WelcomePage: React.FC = () => {
         width: '100vw',
         height: '100vh',
         background: `
-          radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.3) 0%, transparent 50%),
-          radial-gradient(circle at 80% 20%, rgba(0, 255, 136, 0.3) 0%, transparent 50%),
-          radial-gradient(circle at 40% 40%, rgba(0, 153, 255, 0.2) 0%, transparent 50%),
-          linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)
+          radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.14) 0%, transparent 50%),
+          radial-gradient(circle at 80% 20%, rgba(0, 255, 136, 0.10) 0%, transparent 50%),
+          radial-gradient(circle at 40% 40%, rgba(0, 153, 255, 0.10) 0%, transparent 50%),
+          linear-gradient(135deg, #0f172a 0%, #1f2937 100%)
         `,
         backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%',
-        animation: 'gradient 15s ease infinite',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -58,14 +64,32 @@ const WelcomePage: React.FC = () => {
         }
       }}
     >
+        {/* Top App Bar with right-side avatar/login */}
+        <AppBar position="absolute" elevation={0} sx={{ background: 'transparent', boxShadow: 'none', top: 0 }}>
+          <Toolbar sx={{ minHeight: 56 }}>
+            <Box sx={{ flexGrow: 1 }} />
+            <IconButton onClick={() => navigate(isAuthenticated ? '/settings' : '/login')} sx={{ color: '#ffffff' }}>
+              {isAuthenticated ? (
+                <Avatar
+                  sx={{ width: 32, height: 32 }}
+                  src={getSecurePhotoUrl(photoUrl) || undefined}
+                >
+                  {!photoUrl && (username ? username.charAt(0) : 'U')}
+                </Avatar>
+              ) : (
+                <Login sx={{ color: '#ffffff' }} />
+              )}
+            </IconButton>
+          </Toolbar>
+        </AppBar>
         <Paper
           sx={{
             p: 8,
             borderRadius: 6,
-            background: 'rgba(255,255,255,0.98)',
-            backdropFilter: 'blur(20px)',
-            boxShadow: '0 32px 96px rgba(0,0,0,0.4), 0 8px 32px rgba(0, 212, 255, 0.1)',
-            border: '1px solid rgba(255,255,255,0.3)',
+            background: 'rgba(12,12,12,0.9)',
+            backdropFilter: 'blur(16px)',
+            boxShadow: '0 32px 96px rgba(0,0,0,0.6), 0 8px 32px rgba(0, 212, 255, 0.15)',
+            border: '1px solid rgba(255,255,255,0.08)',
             textAlign: 'center',
             maxWidth: 1400,
             mx: 'auto',
@@ -112,6 +136,11 @@ const WelcomePage: React.FC = () => {
                 }}
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
+                  if (!target.dataset.altTried) {
+                    target.dataset.altTried = '1';
+                    target.src = '/logo%20new.png';
+                    return;
+                  }
                   target.style.display = 'none';
                   const fallback = target.nextElementSibling as HTMLElement;
                   if (fallback) fallback.style.display = 'flex';
@@ -139,29 +168,27 @@ const WelcomePage: React.FC = () => {
             variant="h2" 
             gutterBottom 
             sx={{ 
-              fontWeight: 700,
-              background: 'linear-gradient(135deg, #00d4ff 0%, #00ff88 50%, #0099ff 100%)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              fontWeight: 800,
+              letterSpacing: '0.5px',
               mb: 2,
-              textShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+              textShadow: '0 2px 8px rgba(0, 0, 0, 0.5)'
             }}
           >
-            AgenticOmics
+            <Box component="span" sx={{ color: '#00d4ff' }}>Agentic</Box>
+            <Box component="span" sx={{ color: '#00ff88' }}>Omics</Box>
           </Typography>
 
           <Typography 
             variant="h3" 
             sx={{ 
               mb: 4,
-              color: '#374151',
+              color: '#e5e7eb',
               fontWeight: 600,
               fontSize: { xs: '1.5rem', sm: '1.8rem', md: '2.2rem', lg: '2.5rem' },
               letterSpacing: '0.02em',
               lineHeight: 1.3,
-              textShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-              opacity: 0.9
+              textShadow: '0 2px 6px rgba(0, 0, 0, 0.6)',
+              opacity: 0.95
             }}
           >
             AI-Powered Omics Analysis Platform
@@ -170,7 +197,7 @@ const WelcomePage: React.FC = () => {
           <Typography 
             variant="body1" 
             sx={{ 
-              color: 'text.secondary',
+              color: 'rgba(255,255,255,0.78)',
               mb: 6,
               fontSize: '1.1rem',
               maxWidth: 800,
@@ -247,9 +274,10 @@ const WelcomePage: React.FC = () => {
             <Typography 
               variant="h6" 
               sx={{ 
-                color: 'text.secondary',
+                color: '#ffffff',
                 mb: 3,
-                fontWeight: 600
+                fontWeight: 600,
+                textAlign: 'center'
               }}
             >
               Why Choose AgenticOmics?
@@ -313,8 +341,22 @@ const WelcomePage: React.FC = () => {
                           </Box>
             </Stack>
           </Box>
-                  </Paper>
-        </Box>
+
+          {/* Team & Organization for authenticated users */}
+          {isAuthenticated && username && (
+            <Box sx={{ mt: 4 }}>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={8}>
+                  {/* Main content area */}
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <LabHierarchy username={username} />
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </Paper>
+      </Box>
   );
 };
 

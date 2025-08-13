@@ -396,6 +396,66 @@ jspm_packages/
 *.trace.db
 *.lock.db
 auth-db.mv.db
+data-management-db.mv.db
+
+# User data and uploads
+backend/auth/data/
+backend/data-management/data/
+backend/*/data/
+data/
+
+# Profile photos and user uploads - PRIVATE USER DATA
+**/uploads/profile-photos/
+**/uploads/omics-data/
+**/uploads/
+data/uploads/profile-photos/
+data/uploads/omics-data/
+data/uploads/
+
+# User data and sensitive information - PRIVATE USER DATA
+**/user-data/
+**/user-uploads/
+**/personal-data/
+**/private-data/
+data/user-data/
+data/personal-data/
+data/private-data/
+
+# Database files containing user information
+*.db
+*.sqlite
+*.sqlite3
+*.h2.db
+*.mv.db
+*.trace.db
+*.lock.db
+auth-db.mv.db
+data-management-db.mv.db
+
+# User configuration and settings
+**/user-config/
+**/user-settings/
+**/personal-config/
+config/user/
+config/personal/
+
+# Logs that might contain user information
+logs/*.log
+logs/user-*.log
+logs/auth-*.log
+*.user.log
+*.auth.log
+
+# Temporary files that might contain user data
+**/temp/
+**/tmp/
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Database directories
+**/data/
 
 # TernJS port file
 .tern-port

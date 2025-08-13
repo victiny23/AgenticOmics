@@ -7,8 +7,11 @@ set -e
 
 # IP detection functions
 get_local_ip() {
-    if command -v hostname >/dev/null 2>&1; then
-        hostname -I | awk '{print $1}' 2>/dev/null || echo "your-ip-address"
+    if command -v ip >/dev/null 2>&1; then
+        ip route get 8.8.8.8 | awk '{print $7; exit}' 2>/dev/null || echo "your-ip-address"
+    elif command -v hostname >/dev/null 2>&1; then
+        # macOS fallback: hostname -I is not available
+        ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "your-ip-address"
     elif command -v ip >/dev/null 2>&1; then
         ip route get 8.8.8.8 | awk '{print $7; exit}' 2>/dev/null || echo "your-ip-address"
     elif command -v ifconfig >/dev/null 2>&1; then
@@ -48,6 +51,7 @@ export SERVER_ADDRESS=0.0.0.0
 export FRONTEND_PORT=12000
 export API_GATEWAY_PORT=12001
 export AUTH_PORT=8081
+export DATA_MANAGEMENT_PORT=8082
 export VITE_HOST=0.0.0.0
 export VITE_PORT=12000
 export VITE_API_TARGET=https://work-2-bwktzeajbmgslino.prod-runtime.all-hands.dev
@@ -83,6 +87,12 @@ nohup mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=$AUTH_PORT 
 AUTH_PID=$!
 cd ../..
 
+echo "📁 Starting Data Management Service (port $DATA_MANAGEMENT_PORT) with external access..."
+cd backend/data-management
+nohup mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=$DATA_MANAGEMENT_PORT --server.address=$SERVER_ADDRESS" > ../../logs/data-management.log 2>&1 &
+DATA_MANAGEMENT_PID=$!
+cd ../..
+
 # Wait for backend services to start
 echo "⏳ Waiting for API Gateway to start on port $API_GATEWAY_PORT..."
 for i in {1..30}; do
@@ -98,6 +108,16 @@ echo "⏳ Waiting for Authentication Service to start on port $AUTH_PORT..."
 for i in {1..30}; do
     if curl -s http://localhost:$AUTH_PORT/actuator/health >/dev/null 2>&1; then
         echo "✅ Authentication Service is ready!"
+        break
+    fi
+    echo "   Attempt $i/30 - waiting..."
+    sleep 2
+done
+
+echo "⏳ Waiting for Data Management Service to start on port $DATA_MANAGEMENT_PORT..."
+for i in {1..30}; do
+    if curl -s http://localhost:$DATA_MANAGEMENT_PORT/api/data/health >/dev/null 2>&1; then
+        echo "✅ Data Management Service is ready!"
         break
     fi
     echo "   Attempt $i/30 - waiting..."
@@ -156,26 +176,24 @@ done
 
 echo
 echo "🎉 AgenticOmics Platform Started Successfully with External Runtime Access!"
-==================================================================
-📱 Access the application:
-   🏠 Local Access:
-      • Main Application (Frontend): http://localhost:12000
-      • H2 Database Console:        http://localhost:8081/h2-console
-   🔧 Backend Services (for developers):
-      • API Gateway:      http://localhost:12001
-      • Auth Service:     http://localhost:8081
-   🌐 Network Access (from other devices on same network):
-      • Main Application: http://:12000
-   🌍 External Access (if port forwarding or tunnel is configured):
-      • Main Application: http://98.42.217.60:12000
-🔗 Share these URLs with others:
-   📱 Mobile/Tablet on same network: http://:12000
-   💻 Other Laptops on same network: http://:12000
-   🌍 External devices (if port forwarding/tunnel configured): http://98.42.217.60:12000
-echo ""
+echo "=================================================================="
+echo "📱 Access the application:"
+echo "   🏠 Local Access:"
+echo "      • Main Application (Frontend): http://localhost:$FRONTEND_PORT"
+echo "      • H2 Database Console:        http://localhost:$AUTH_PORT/h2-console"
+echo "   🔧 Backend Services (for developers):"
+echo "      • API Gateway:      http://localhost:$API_GATEWAY_PORT"
+echo "      • Auth Service:     http://localhost:$AUTH_PORT"
+echo "      • Data Management:  http://localhost:$DATA_MANAGEMENT_PORT"
+echo "   🌐 Network Access (from other devices on same network):"
+echo "      • Main Application: http://$LOCAL_IP:$FRONTEND_PORT"
+echo "   🌍 External Access (if port forwarding or tunnel is configured):"
+echo "      • Main Application: http://$PUBLIC_IP:$FRONTEND_PORT"
+echo
 echo "📁 Logs available in:"
 echo "   - logs/gateway.log"
 echo "   - logs/auth.log"
+echo "   - logs/data-management.log"
 echo "   - logs/frontend.log"
 echo ""
 echo "🛑 To stop all services:"

@@ -1,0 +1,165 @@
+# Production Configuration for AgenticOmics Auth Service
+# This configuration uses external databases and cloud storage
+
+server:
+  port: ${AUTH_PORT:8081}
+  address: ${SERVER_ADDRESS:0.0.0.0}
+
+spring:
+  application:
+    name: agenticomics-auth
+  profiles:
+    active: prod
+  
+  # Production Database Configuration
+  datasource:
+    # Use environment variables for database connection
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/agenticomics_auth}
+    username: ${DATABASE_USERNAME:agenticomics}
+    password: ${DATABASE_PASSWORD:}
+    driver-class-name: ${DATABASE_DRIVER:org.postgresql.Driver}
+    
+    # Connection pool settings
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate  # Don't auto-create tables in production
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+          fetch_size: 20
+  
+  # Disable H2 console in production
+  h2:
+    console:
+      enabled: false
+
+# Email Configuration for Production
+spring:
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:}  # Must be set in production
+  expiration: ${JWT_EXPIRATION:86400000}  # 24 hours
+
+# File Storage Configuration
+app:
+  file-storage:
+    # Use cloud storage in production
+    type: ${STORAGE_TYPE:s3}  # s3, gcs, azure
+    s3:
+      bucket: ${S3_BUCKET:agenticomics-user-data}
+      region: ${S3_REGION:us-east-1}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+    gcs:
+      bucket: ${GCS_BUCKET:agenticomics-user-data}
+      project-id: ${GCS_PROJECT_ID:}
+      credentials-file: ${GCS_CREDENTIALS_FILE:}
+    azure:
+      container: ${AZURE_CONTAINER:user-data}
+      account-name: ${AZURE_ACCOUNT_NAME:}
+      account-key: ${AZURE_ACCOUNT_KEY:}
+
+# Security Configuration
+security:
+  # Password policy
+  password:
+    min-length: 8
+    require-uppercase: true
+    require-lowercase: true
+    require-numbers: true
+    require-special-chars: true
+  
+  # Session management
+  session:
+    timeout: 3600  # 1 hour
+    max-sessions: 1
+  
+  # Rate limiting
+  rate-limit:
+    login-attempts: 5
+    window-minutes: 15
+
+# Logging Configuration
+logging:
+  level:
+    com.agenticomics: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/auth-prod.log
+    max-size: 100MB
+    max-history: 30
+
+# Health Check Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    db:
+      enabled: true
+    disk:
+      enabled: true
+    mail:
+      enabled: true
+
+# Monitoring Configuration
+monitoring:
+  metrics:
+    enabled: true
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    enabled: ${TRACING_ENABLED:false}
+    jaeger:
+      endpoint: ${JAEGER_ENDPOINT:}
+
+# Cache Configuration
+spring:
+  cache:
+    type: redis
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms 
