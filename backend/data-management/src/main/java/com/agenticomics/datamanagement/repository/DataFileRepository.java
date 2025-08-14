@@ -86,4 +86,17 @@ public interface DataFileRepository extends JpaRepository<DataFile, Long> {
             @Param("fileType") String fileType,
             @Param("isPublic") Boolean isPublic
     );
+    
+    // Lab/Team context queries
+    List<DataFile> findByLabIdAndUploadedByOrderByUploadedAtDesc(Long labId, String uploadedBy);
+    
+    List<DataFile> findByTeamIdAndUploadedByOrderByUploadedAtDesc(Long teamId, String uploadedBy);
+    
+    List<DataFile> findByLabNameContainingAndUploadedByNotOrderByUploadedAtDesc(String labName, String uploadedBy);
+    
+    List<DataFile> findByUploadContextOrderByUploadedAtDesc(String uploadContext);
+    
+    List<DataFile> findByLabIdOrderByUploadedAtDesc(Long labId);
+    
+    List<DataFile> findByTeamIdOrderByUploadedAtDesc(Long teamId);
 } 

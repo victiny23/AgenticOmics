@@ -73,6 +73,22 @@ public class DataFile {
     @Column(name = "checksum")
     private String checksum;
     
+    // Lab/Team context fields
+    @Column(name = "lab_id")
+    private Long labId;
+    
+    @Column(name = "lab_name")
+    private String labName;
+    
+    @Column(name = "team_id")
+    private Long teamId;
+    
+    @Column(name = "team_name")
+    private String teamName;
+    
+    @Column(name = "upload_context", nullable = false)
+    private String uploadContext; // "LAB" or "TEAM"
+    
     public enum FileStatus {
         UPLOADED,
         PROCESSING,

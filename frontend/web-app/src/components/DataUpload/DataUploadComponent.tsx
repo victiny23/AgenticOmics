@@ -34,6 +34,7 @@ import {
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
+import LabTeamContextSelector from '../LabTeamContext/LabTeamContextSelector';
 
 interface UploadFile {
   file: File;
@@ -71,6 +72,15 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
 
   const { username } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Lab/Team context state
+  const [currentContext, setCurrentContext] = useState<{
+    type: 'LAB' | 'TEAM';
+    id: number;
+    name: string;
+    code: string;
+    role: string;
+  } | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles: UploadFile[] = acceptedFiles.map(file => ({
@@ -118,6 +128,22 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
       return;
     }
 
+    if (!currentContext) {
+      setSnackbar({
+        open: true,
+        message: 'Please select a lab/team context before uploading files',
+        severity: 'error',
+      });
+      return;
+    }
+
+    // Show context confirmation
+    setSnackbar({
+      open: true,
+      message: `File will be uploaded to ${currentContext.name} (${currentContext.type})`,
+      severity: 'info',
+    });
+
     setSelectedFile(uploadFile);
     setShowUploadDialog(true);
   };
@@ -141,6 +167,16 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
     formData.append('tags', uploadMetadata.tags);
     formData.append('isPublic', uploadMetadata.isPublic.toString());
     formData.append('metadata', uploadMetadata.metadata);
+    
+    // Add lab/team context
+    formData.append('uploadContext', currentContext.type);
+    if (currentContext.type === 'LAB') {
+      formData.append('labId', currentContext.id.toString());
+      formData.append('labName', currentContext.name);
+    } else {
+      formData.append('teamId', currentContext.id.toString());
+      formData.append('teamName', currentContext.name);
+    }
 
     // Create abort controller for this upload
     abortControllerRef.current = new AbortController();
@@ -286,6 +322,12 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
 
   return (
     <Box>
+      {/* Lab/Team Context Selector */}
+      <LabTeamContextSelector
+        onContextChange={setCurrentContext}
+        currentContext={currentContext}
+      />
+      
       {/* Upload Area */}
       <Paper
         {...getRootProps()}

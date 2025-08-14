@@ -14,6 +14,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
+import java.time.LocalDateTime;
 import com.agenticomics.auth.dto.UserLabMembershipDto;
 import com.agenticomics.auth.dto.UserTeamMembershipDto;
 import com.agenticomics.auth.service.LabService;
@@ -1693,5 +1695,135 @@ public class UserController {
         public void setTeamDescription(String teamDescription) { this.teamDescription = teamDescription; }
         public Long getLabId() { return labId; }
         public void setLabId(Long labId) { this.labId = labId; }
+    }
+    
+    /**
+     * Update lab file statistics when a file is uploaded
+     */
+    @PostMapping("/labs/{labId}/file-stats")
+    public ResponseEntity<String> updateLabFileStats(
+            @PathVariable Long labId,
+            @RequestBody Map<String, Object> request) {
+        try {
+            Optional<Lab> labOpt = labRepository.findById(labId);
+            if (labOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Lab not found");
+            }
+            
+            Lab lab = labOpt.get();
+            Long fileSize = Long.valueOf(request.get("fileSize").toString());
+            
+            // Update file statistics
+            lab.setFileCount(lab.getFileCount() + 1);
+            lab.setTotalFileSize(lab.getTotalFileSize() + fileSize);
+            lab.setLastFileUpload(LocalDateTime.now());
+            
+            labRepository.save(lab);
+            
+            return ResponseEntity.ok("Lab file statistics updated successfully");
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Failed to update lab file statistics: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Update team file statistics when a file is uploaded
+     */
+    @PostMapping("/teams/{teamId}/file-stats")
+    public ResponseEntity<String> updateTeamFileStats(
+            @PathVariable Long teamId,
+            @RequestBody Map<String, Object> request) {
+        try {
+            Optional<Team> teamOpt = teamRepository.findById(teamId);
+            if (teamOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Team not found");
+            }
+            
+            Team team = teamOpt.get();
+            Long fileSize = Long.valueOf(request.get("fileSize").toString());
+            
+            // Update file statistics
+            team.setFileCount(team.getFileCount() + 1);
+            team.setTotalFileSize(team.getTotalFileSize() + fileSize);
+            team.setLastFileUpload(LocalDateTime.now());
+            
+            teamRepository.save(team);
+            
+            return ResponseEntity.ok("Team file statistics updated successfully");
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Failed to update team file statistics: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get lab file statistics
+     */
+    @GetMapping("/labs/{labId}/file-stats")
+    public ResponseEntity<Map<String, Object>> getLabFileStats(@PathVariable Long labId) {
+        try {
+            Optional<Lab> labOpt = labRepository.findById(labId);
+            if (labOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            
+            Lab lab = labOpt.get();
+            
+            // Ensure we have safe values
+            Long fileCount = lab.getFileCount() != null ? lab.getFileCount() : 0L;
+            Long totalFileSize = lab.getTotalFileSize() != null ? lab.getTotalFileSize() : 0L;
+            
+            Map<String, Object> stats = Map.of(
+                "labId", lab.getId(),
+                "labName", lab.getLabName(),
+                "fileCount", fileCount,
+                "totalFileSize", totalFileSize,
+                "lastFileUpload", lab.getLastFileUpload()
+            );
+            
+            return ResponseEntity.ok(stats);
+            
+        } catch (Exception e) {
+            System.err.println("Error getting lab file stats for labId " + labId + ": " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
+     * Get team file statistics
+     */
+    @GetMapping("/teams/{teamId}/file-stats")
+    public ResponseEntity<Map<String, Object>> getTeamFileStats(@PathVariable Long teamId) {
+        try {
+            Optional<Team> teamOpt = teamRepository.findById(teamId);
+            if (teamOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            
+            Team team = teamOpt.get();
+            
+            // Ensure we have safe values
+            Long fileCount = team.getFileCount() != null ? team.getFileCount() : 0L;
+            Long totalFileSize = team.getTotalFileSize() != null ? team.getTotalFileSize() : 0L;
+            
+            Map<String, Object> stats = Map.of(
+                "teamId", team.getId(),
+                "teamName", team.getTeamName(),
+                "fileCount", fileCount,
+                "totalFileSize", totalFileSize,
+                "lastFileUpload", team.getLastFileUpload()
+            );
+            
+            return ResponseEntity.ok(stats);
+            
+        } catch (Exception e) {
+            System.err.println("Error getting team file stats for teamId " + teamId + ": " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 }

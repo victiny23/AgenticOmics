@@ -2,6 +2,8 @@ package com.agenticomics.datamanagement.service;
 
 import com.agenticomics.datamanagement.dto.DataFileResponse;
 import com.agenticomics.datamanagement.dto.DataFileUpdateRequest;
+import com.agenticomics.datamanagement.dto.LabTeamFileStatistics;
+import com.agenticomics.datamanagement.dto.LabTeamContextStats;
 import com.agenticomics.datamanagement.entity.DataFile;
 import com.agenticomics.datamanagement.repository.DataFileRepository;
 import com.agenticomics.datamanagement.config.FileStorageConfig;
@@ -23,6 +25,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.ArrayList;
+import org.springframework.web.client.RestTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -31,12 +37,15 @@ public class DataFileService {
     
     private final DataFileRepository dataFileRepository;
     private final FileStorageConfig fileStorageConfig;
+    private final RestTemplate restTemplate = new RestTemplate();
     
     /**
      * Upload a new data file
      */
     public DataFileResponse uploadFile(MultipartFile file, String uploadedBy, String description, 
-                                     String tags, Boolean isPublic, String metadata) {
+                                     String tags, Boolean isPublic, String metadata,
+                                     String uploadContext, Long labId, String labName,
+                                     Long teamId, String teamName) {
         try {
             // Validate file
             validateFile(file);
@@ -77,10 +86,22 @@ public class DataFileService {
                     .validationStatus(DataFile.ValidationStatus.PENDING)
                     .metadata(metadata)
                     .checksum(checksum)
+                    .uploadContext(uploadContext)
+                    .labId(labId)
+                    .labName(labName)
+                    .teamId(teamId)
+                    .teamName(teamName)
                     .build();
             
             // Save to database
             DataFile savedFile = dataFileRepository.save(dataFile);
+            
+            // Update lab/team file statistics
+            if (uploadContext != null && uploadContext.equals("LAB") && labId != null) {
+                updateLabTeamFileStatistics("LAB", labId, file.getSize());
+            } else if (uploadContext != null && uploadContext.equals("TEAM") && teamId != null) {
+                updateLabTeamFileStatistics("TEAM", teamId, file.getSize());
+            }
             
             log.info("File uploaded successfully: {} by user: {}", originalFilename, uploadedBy);
             
@@ -310,6 +331,100 @@ public class DataFileService {
         } catch (NoSuchAlgorithmException e) {
             log.warn("MD5 algorithm not available, skipping checksum calculation");
             return null;
+        }
+    }
+    
+    /**
+     * Get files by lab context
+     */
+    public List<DataFileResponse> getFilesByLab(Long labId, String username) {
+        List<DataFile> files = dataFileRepository.findByLabIdAndUploadedByOrderByUploadedAtDesc(labId, username);
+        return files.stream()
+                .map(DataFileResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get files by team context
+     */
+    public List<DataFileResponse> getFilesByTeam(Long teamId, String username) {
+        List<DataFile> files = dataFileRepository.findByTeamIdAndUploadedByOrderByUploadedAtDesc(teamId, username);
+        return files.stream()
+                .map(DataFileResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get files uploaded by subordinates (for supervisors)
+     */
+    public List<DataFileResponse> getSubordinateFiles(String supervisorUsername) {
+        // This would need to be implemented based on your user hierarchy
+        // For now, we'll return files from labs where the user is a PI
+        List<DataFile> files = dataFileRepository.findByLabNameContainingAndUploadedByNotOrderByUploadedAtDesc(
+            supervisorUsername, supervisorUsername);
+        return files.stream()
+                .map(DataFileResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get file statistics by lab/team context
+     */
+    public LabTeamFileStatistics getLabTeamFileStatistics(String username) {
+        List<DataFile> userFiles = dataFileRepository.findByUploadedByOrderByUploadedAtDesc(username);
+        
+        Map<String, LabTeamContextStats> contextStats = new HashMap<>();
+        
+        for (DataFile file : userFiles) {
+            String contextKey = file.getUploadContext() + "_" + 
+                (file.getUploadContext().equals("LAB") ? file.getLabId() : file.getTeamId());
+            
+            if (!contextStats.containsKey(contextKey)) {
+                LabTeamContextStats stats = new LabTeamContextStats();
+                stats.setContextType(file.getUploadContext());
+                stats.setContextId(file.getUploadContext().equals("LAB") ? file.getLabId() : file.getTeamId());
+                stats.setContextName(file.getUploadContext().equals("LAB") ? file.getLabName() : file.getTeamName());
+                stats.setFileCount(0L);
+                stats.setTotalSize(0L);
+                stats.setFiles(new ArrayList<>());
+                contextStats.put(contextKey, stats);
+            }
+            
+            LabTeamContextStats stats = contextStats.get(contextKey);
+            stats.setFileCount(stats.getFileCount() + 1);
+            stats.setTotalSize(stats.getTotalSize() + file.getFileSize());
+            stats.getFiles().add(DataFileResponse.fromEntity(file));
+        }
+        
+                    return LabTeamFileStatistics.builder()
+                    .totalContexts(contextStats.size())
+                    .totalFiles(userFiles.size())
+                    .totalSize(userFiles.stream().mapToLong(DataFile::getFileSize).sum())
+                    .contextStats(new ArrayList<>(contextStats.values()))
+                    .build();
+    }
+    
+    /**
+     * Update lab/team file statistics when a file is uploaded
+     */
+    private void updateLabTeamFileStatistics(String uploadContext, Long contextId, Long fileSize) {
+        try {
+            String authServiceUrl = "http://localhost:8081/api/auth";
+            String endpoint = uploadContext.equals("LAB") ? 
+                authServiceUrl + "/labs/" + contextId + "/file-stats" :
+                authServiceUrl + "/teams/" + contextId + "/file-stats";
+            
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("fileSize", fileSize);
+            requestBody.put("uploadTime", LocalDateTime.now());
+            
+            restTemplate.postForObject(endpoint, requestBody, String.class);
+            
+            log.info("Updated {} file statistics for ID: {}", uploadContext, contextId);
+            
+        } catch (Exception e) {
+            log.error("Failed to update {} file statistics for ID: {}, error: {}", 
+                uploadContext, contextId, e.getMessage());
         }
     }
     
