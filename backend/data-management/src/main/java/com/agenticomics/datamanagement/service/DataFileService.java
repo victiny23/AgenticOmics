@@ -29,6 +29,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.ArrayList;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.MediaType;
 
 @Service
 @RequiredArgsConstructor
@@ -181,7 +185,7 @@ public class DataFileService {
     }
     
     /**
-     * Delete file
+     * Delete file with role-based permissions
      */
     public void deleteFile(Long id, String username) {
         Optional<DataFile> fileOpt = dataFileRepository.findById(id);
@@ -191,8 +195,8 @@ public class DataFileService {
         
         DataFile file = fileOpt.get();
         
-        // Check if user owns the file
-        if (!file.getUploadedBy().equals(username)) {
+        // Check if user has permission to delete this file
+        if (!canDeleteFile(file, username)) {
             throw new DataFileException("Access denied: You don't have permission to delete this file");
         }
         
@@ -211,6 +215,63 @@ public class DataFileService {
         } catch (IOException e) {
             log.error("Error deleting file: {}", file.getOriginalFilename(), e);
             throw new DataFileException("Failed to delete file: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Check if user can delete a specific file based on role-based permissions
+     */
+    private boolean canDeleteFile(DataFile file, String username) {
+        try {
+            // User can always delete their own files
+            if (file.getUploadedBy().equals(username)) {
+                log.info("User {} can delete file {} because they own it", username, file.getOriginalFilename());
+                return true;
+            }
+            
+            // Call auth service to check role-based permissions
+            String authServiceUrl = "http://localhost:12001/api/auth/check-file-deletion-permission";
+            
+            RestTemplate restTemplate = new RestTemplate();
+            
+            // Prepare request body
+            Map<String, Object> requestBody = Map.of(
+                "fileUploadedBy", file.getUploadedBy(),
+                "uploadContext", file.getUploadContext(),
+                "labId", file.getLabId(),
+                "teamId", file.getTeamId()
+            );
+            
+            // Prepare headers
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Username", username);
+            
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+            
+            // Make the request
+            ResponseEntity<Map> response = restTemplate.postForEntity(authServiceUrl, requestEntity, Map.class);
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Boolean canDelete = (Boolean) response.getBody().get("canDelete");
+                String reason = (String) response.getBody().get("reason");
+                
+                log.info("Permission check result for user {} on file {}: canDelete={}, reason={}", 
+                    username, file.getOriginalFilename(), canDelete, reason);
+                
+                return canDelete != null && canDelete;
+            } else {
+                log.warn("Failed to get permission from auth service for user {} on file {}", 
+                    username, file.getOriginalFilename());
+                return false;
+            }
+            
+        } catch (Exception e) {
+            log.error("Error checking file deletion permission for user {} on file {}: {}", 
+                username, file.getOriginalFilename(), e.getMessage());
+            
+            // Fallback: user can only delete their own files
+            return file.getUploadedBy().equals(username);
         }
     }
     
@@ -335,20 +396,30 @@ public class DataFileService {
     }
     
     /**
-     * Get files by lab context
+     * Get files by lab context - with permission checking for Lab PIs
      */
     public List<DataFileResponse> getFilesByLab(Long labId, String username) {
-        List<DataFile> files = dataFileRepository.findByLabIdAndUploadedByOrderByUploadedAtDesc(labId, username);
+        // First check if user has permission to view lab files
+        if (!canViewLabFiles(labId, username)) {
+            throw new DataFileException("Access denied: You don't have permission to view files in this lab");
+        }
+        
+        List<DataFile> files = dataFileRepository.findByLabIdOrderByUploadedAtDesc(labId);
         return files.stream()
                 .map(DataFileResponse::fromEntity)
                 .collect(Collectors.toList());
     }
     
     /**
-     * Get files by team context
+     * Get files by team context - with permission checking for Team Leaders
      */
     public List<DataFileResponse> getFilesByTeam(Long teamId, String username) {
-        List<DataFile> files = dataFileRepository.findByTeamIdAndUploadedByOrderByUploadedAtDesc(teamId, username);
+        // First check if user has permission to view team files
+        if (!canViewTeamFiles(teamId, username)) {
+            throw new DataFileException("Access denied: You don't have permission to view files in this team");
+        }
+        
+        List<DataFile> files = dataFileRepository.findByTeamIdOrderByUploadedAtDesc(teamId);
         return files.stream()
                 .map(DataFileResponse::fromEntity)
                 .collect(Collectors.toList());
@@ -397,8 +468,8 @@ public class DataFileService {
         }
         
                     return LabTeamFileStatistics.builder()
-                    .totalContexts(contextStats.size())
-                    .totalFiles(userFiles.size())
+                    .totalContexts((long) contextStats.size())
+                    .totalFiles((long) userFiles.size())
                     .totalSize(userFiles.stream().mapToLong(DataFile::getFileSize).sum())
                     .contextStats(new ArrayList<>(contextStats.values()))
                     .build();
@@ -425,6 +496,66 @@ public class DataFileService {
         } catch (Exception e) {
             log.error("Failed to update {} file statistics for ID: {}, error: {}", 
                 uploadContext, contextId, e.getMessage());
+        }
+    }
+    
+    /**
+     * Check if user can view lab files (Lab PI or lab member)
+     */
+    private boolean canViewLabFiles(Long labId, String username) {
+        try {
+            String authServiceUrl = "http://localhost:12001/api/auth/check-lab-file-access";
+            
+            Map<String, Object> requestBody = Map.of("labId", labId);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Username", username);
+            
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(authServiceUrl, requestEntity, Map.class);
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Boolean canView = (Boolean) response.getBody().get("canView");
+                return canView != null && canView;
+            }
+            
+            return false;
+        } catch (Exception e) {
+            log.error("Error checking lab file access for user {} on lab {}: {}", 
+                username, labId, e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Check if user can view team files (Team Leader or team member)
+     */
+    private boolean canViewTeamFiles(Long teamId, String username) {
+        try {
+            String authServiceUrl = "http://localhost:12001/api/auth/check-team-file-access";
+            
+            Map<String, Object> requestBody = Map.of("teamId", teamId);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Username", username);
+            
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(authServiceUrl, requestEntity, Map.class);
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Boolean canView = (Boolean) response.getBody().get("canView");
+                return canView != null && canView;
+            }
+            
+            return false;
+        } catch (Exception e) {
+            log.error("Error checking team file access for user {} on team {}: {}", 
+                username, teamId, e.getMessage());
+            return false;
         }
     }
     

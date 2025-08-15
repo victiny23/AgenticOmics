@@ -169,13 +169,15 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
     formData.append('metadata', uploadMetadata.metadata);
     
     // Add lab/team context
-    formData.append('uploadContext', currentContext.type);
-    if (currentContext.type === 'LAB') {
-      formData.append('labId', currentContext.id.toString());
-      formData.append('labName', currentContext.name);
-    } else {
-      formData.append('teamId', currentContext.id.toString());
-      formData.append('teamName', currentContext.name);
+    if (currentContext) {
+      formData.append('uploadContext', currentContext.type);
+      if (currentContext.type === 'LAB') {
+        formData.append('labId', currentContext.id.toString());
+        formData.append('labName', currentContext.name);
+      } else {
+        formData.append('teamId', currentContext.id.toString());
+        formData.append('teamName', currentContext.name);
+      }
     }
 
     // Create abort controller for this upload

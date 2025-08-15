@@ -87,6 +87,18 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
     code: string;
     role: string;
   } | null>(null);
+  const [viewContext, setViewContext] = useState<{
+    type: 'LAB' | 'TEAM';
+    id: number;
+    name: string;
+    code: string;
+  } | null>(null);
+  const [availableContexts, setAvailableContexts] = useState<Array<{
+    type: 'LAB' | 'TEAM';
+    id: number;
+    name: string;
+    code: string;
+  }>>([]);
   const [selectedFile, setSelectedFile] = useState<DataFile | null>(null);
   const [showFileDialog, setShowFileDialog] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -95,15 +107,74 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
     tags: '',
     isPublic: false,
   });
+  const [filePermissions, setFilePermissions] = useState<Map<number, boolean>>(new Map());
 
   useEffect(() => {
     if (currentContext) {
+      loadAvailableContexts();
+    }
+  }, [currentContext]);
+
+  useEffect(() => {
+    if (viewContext) {
       loadFiles();
     }
-  }, [currentContext, activeTab]);
+  }, [viewContext, activeTab]);
+
+  const loadAvailableContexts = async () => {
+    if (!username) return;
+
+    try {
+      const token = localStorage.getItem('jwtToken');
+      const response = await fetch('http://localhost:12001/api/auth/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username,
+        },
+      });
+
+      if (response.ok) {
+        const profile = await response.json();
+        const contexts: Array<{type: 'LAB' | 'TEAM', id: number, name: string, code: string}> = [];
+        
+        // Add lab contexts
+        if (profile.labMemberships) {
+          profile.labMemberships.forEach((lab: any) => {
+            contexts.push({
+              type: 'LAB',
+              id: lab.labId,
+              name: lab.labName,
+              code: lab.labCode
+            });
+          });
+        }
+        
+        // Add team contexts
+        if (profile.teamMemberships) {
+          profile.teamMemberships.forEach((team: any) => {
+            contexts.push({
+              type: 'TEAM',
+              id: team.teamId,
+              name: team.teamName,
+              code: team.teamCode
+            });
+          });
+        }
+        
+        setAvailableContexts(contexts);
+        
+        // Set the first context as default view context
+        if (contexts.length > 0 && !viewContext) {
+          setViewContext(contexts[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading available contexts:', err);
+    }
+  };
 
   const loadFiles = async () => {
-    if (!username || !currentContext) return;
+    if (!username || !viewContext) return;
 
     try {
       setLoading(true);
@@ -114,17 +185,17 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
 
       switch (activeTab) {
         case 0: // My Files
-          if (currentContext.type === 'LAB') {
-            endpoint = `http://localhost:12001/api/data/files/lab/${currentContext.id}`;
+          if (viewContext.type === 'LAB') {
+            endpoint = `http://localhost:12001/api/data/files/lab/${viewContext.id}`;
           } else {
-            endpoint = `http://localhost:12001/api/data/files/team/${currentContext.id}`;
+            endpoint = `http://localhost:12001/api/data/files/team/${viewContext.id}`;
           }
           break;
         case 1: // All Files in Context
-          if (currentContext.type === 'LAB') {
-            endpoint = `http://localhost:12001/api/data/files/lab/${currentContext.id}`;
+          if (viewContext.type === 'LAB') {
+            endpoint = `http://localhost:12001/api/data/files/lab/${viewContext.id}`;
           } else {
-            endpoint = `http://localhost:12001/api/data/files/team/${currentContext.id}`;
+            endpoint = `http://localhost:12001/api/data/files/team/${viewContext.id}`;
           }
           break;
         case 2: // Subordinate Files (for supervisors)
@@ -147,6 +218,8 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
       if (response.ok) {
         const data = await response.json();
         setFiles(data);
+        // Load permissions for all files
+        await loadFilePermissions();
       } else {
         setError('Failed to load files');
       }
@@ -175,6 +248,47 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
     setShowFileDialog(true);
   };
 
+  const checkFileDeletionPermission = async (file: DataFile) => {
+    try {
+      const token = localStorage.getItem('jwtToken');
+      const response = await fetch('http://localhost:12001/api/auth/check-file-deletion-permission', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || '',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileUploadedBy: file.uploadedBy,
+          uploadContext: file.uploadContext,
+          labId: file.labId,
+          teamId: file.teamId,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        return result.canDelete;
+      }
+    } catch (err) {
+      console.error('Error checking file deletion permission:', err);
+    }
+    
+    // Fallback: user can only delete their own files
+    return file.uploadedBy === username;
+  };
+
+  const loadFilePermissions = async () => {
+    const permissions = new Map<number, boolean>();
+    
+    for (const file of files) {
+      const canDelete = await checkFileDeletionPermission(file);
+      permissions.set(file.id, canDelete);
+    }
+    
+    setFilePermissions(permissions);
+  };
+
   const handleFileDelete = async (fileId: number) => {
     if (!confirm('Are you sure you want to delete this file?')) return;
 
@@ -190,8 +304,13 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
 
       if (response.ok) {
         setFiles(files.filter(f => f.id !== fileId));
+        // Remove permission from map
+        const newPermissions = new Map(filePermissions);
+        newPermissions.delete(fileId);
+        setFilePermissions(newPermissions);
       } else {
-        setError('Failed to delete file');
+        const errorData = await response.json();
+        setError(errorData.message || 'Failed to delete file');
       }
     } catch (err) {
       console.error('Error deleting file:', err);
@@ -275,6 +394,11 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
 
   return (
     <Box>
+      {/* Debug message */}
+      <Alert severity="info" sx={{ mb: 2 }}>
+        Debug: DataManagementPanel is rendering. Current context: {currentContext?.name || 'None'}, View context: {viewContext?.name || 'None'}
+      </Alert>
+
       {/* Lab/Team Context Selector */}
       <LabTeamContextSelector
         onContextChange={setCurrentContext}
@@ -286,6 +410,11 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Business color="primary" />
             Data Management - {currentContext.name} ({currentContext.code})
+            {viewContext && (
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                • Viewing: {viewContext.name} ({viewContext.code})
+              </Typography>
+            )}
           </Typography>
 
           <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)} sx={{ mb: 2 }}>
@@ -294,6 +423,33 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
             {isSupervisor && <Tab label="Subordinate Files" />}
             <Tab label="Public Files" />
           </Tabs>
+
+          {/* Context Selection Dropdown for Viewing Files - Only show in "All Files in Context" tab */}
+          {activeTab === 1 && (
+            <Box sx={{ mb: 2 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>View Files in Context</InputLabel>
+                <Select
+                  value={viewContext ? `${viewContext.type}_${viewContext.id}` : ''}
+                  onChange={(e) => {
+                    const [type, id] = e.target.value.split('_');
+                    const context = availableContexts.find(c => c.type === type && c.id === parseInt(id));
+                    if (context) {
+                      setViewContext(context);
+                    }
+                  }}
+                  label="View Files in Context"
+                >
+                  {availableContexts.map((context) => (
+                    <MenuItem key={`${context.type}_${context.id}`} value={`${context.type}_${context.id}`}>
+                      {context.type === 'LAB' ? <Business sx={{ mr: 1 }} /> : <Group sx={{ mr: 1 }} />}
+                      {context.name} ({context.code})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          )}
 
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -400,14 +556,16 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
                           <Edit />
                         </IconButton>
                       )}
-                      <IconButton
-                        size="small"
-                        onClick={() => handleFileDelete(file.id)}
-                        title="Delete file"
-                        color="error"
-                      >
-                        <Delete />
-                      </IconButton>
+                      {filePermissions.get(file.id) && (
+                        <IconButton
+                          size="small"
+                          onClick={() => handleFileDelete(file.id)}
+                          title="Delete file"
+                          color="error"
+                        >
+                          <Delete />
+                        </IconButton>
+                      )}
                     </Box>
                   </ListItemSecondaryAction>
                 </ListItem>
@@ -418,7 +576,7 @@ const DataManagementPanel: React.FC<DataManagementPanelProps> = ({ onFileSelect 
           {files.length === 0 && !loading && (
             <Box textAlign="center" p={3}>
               <Typography variant="body1" color="text.secondary">
-                No files found in this context.
+                No files found in {viewContext?.name} ({viewContext?.code}).
               </Typography>
             </Box>
           )}

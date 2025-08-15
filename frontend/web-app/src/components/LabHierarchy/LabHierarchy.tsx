@@ -340,6 +340,33 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
     }
   };
 
+  // Role-based access control functions
+  const canCreateLab = (userRole: string): boolean => {
+    return userRole === 'Lab PI';
+  };
+
+  const canCreateTeam = (userRole: string): boolean => {
+    return ['Lab PI', 'PhD Student', 'Master Student', 'Team Leader', 'Senior Member'].includes(userRole);
+  };
+
+  const getUserHighestRole = (): string => {
+    if (!profile) return '';
+    
+    // Check lab memberships for highest role
+    const labRoles = profile.labMemberships?.map(m => m.roleInLab) || [];
+    const teamRoles = profile.teamMemberships?.map(m => m.roleInTeam) || [];
+    
+    const allRoles = [...labRoles, ...teamRoles, profile.role];
+    
+    // Priority order: Lab PI > Team Leader > PhD Student > Master Student > others
+    if (allRoles.includes('Lab PI')) return 'Lab PI';
+    if (allRoles.includes('Team Leader')) return 'Team Leader';
+    if (allRoles.includes('PhD Student')) return 'PhD Student';
+    if (allRoles.includes('Master Student')) return 'Master Student';
+    
+    return profile.role || '';
+  };
+
   if (loading) {
     return (
       <Card>
@@ -441,16 +468,75 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
               </Tabs>
             </Box>
 
-            {/* Create Organization Button */}
-            <Box sx={{ mb: 2 }}>
-              <Button
-                variant="outlined"
-                startIcon={<Add />}
-                onClick={() => setCreateDialogOpen(true)}
-                size="small"
-              >
-                Create New Organization
-              </Button>
+            {/* User Role and Permissions Display */}
+            <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.300' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                Your Role & Permissions
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Chip 
+                  label={`Role: ${getUserHighestRole()}`}
+                  color="primary"
+                  size="small"
+                />
+                <Chip 
+                  label={`Create Lab: ${canCreateLab(getUserHighestRole()) ? '✅' : '❌'}`}
+                  color={canCreateLab(getUserHighestRole()) ? 'success' : 'default'}
+                  size="small"
+                />
+                <Chip 
+                  label={`Create Team: ${canCreateTeam(getUserHighestRole()) ? '✅' : '❌'}`}
+                  color={canCreateTeam(getUserHighestRole()) ? 'success' : 'default'}
+                  size="small"
+                />
+              </Box>
+            </Box>
+
+            {/* Create Organization Buttons - Role-based Access Control */}
+            <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {(() => {
+                const userRole = getUserHighestRole();
+                const canCreateLabPermission = canCreateLab(userRole);
+                const canCreateTeamPermission = canCreateTeam(userRole);
+                
+                return (
+                  <>
+                    {canCreateLabPermission && (
+                      <Button
+                        variant="outlined"
+                        startIcon={<Add />}
+                        onClick={() => {
+                          setCreateType('lab');
+                          setCreateDialogOpen(true);
+                        }}
+                        size="small"
+                        color="primary"
+                      >
+                        Create New Lab
+                      </Button>
+                    )}
+                    {canCreateTeamPermission && (
+                      <Button
+                        variant="outlined"
+                        startIcon={<Add />}
+                        onClick={() => {
+                          setCreateType('team');
+                          setCreateDialogOpen(true);
+                        }}
+                        size="small"
+                        color="secondary"
+                      >
+                        Create New Team
+                      </Button>
+                    )}
+                    {!canCreateLabPermission && !canCreateTeamPermission && (
+                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                        You don't have permission to create labs or teams.
+                      </Typography>
+                    )}
+                  </>
+                );
+              })()}
             </Box>
 
             {/* Labs Tab */}

@@ -370,6 +370,21 @@ public class UserService {
         return userOpt.isPresent() && "Lab PI".equals(userOpt.get().getRole());
     }
     
+    public boolean canCreateTeam(String username) {
+        Optional<User> userOpt = userRepository.findActiveUserByUsername(username);
+        if (userOpt.isEmpty()) {
+            return false;
+        }
+        
+        String userRole = userOpt.get().getRole();
+        // Lab PI, PhD Student, Master Student, Team Leader, Senior Member can create teams
+        return "Lab PI".equals(userRole) || 
+               "PhD Student".equals(userRole) || 
+               "Master Student".equals(userRole) || 
+               "Team Leader".equals(userRole) || 
+               "Senior Member".equals(userRole);
+    }
+    
     // Supervisor relationship methods
     public List<User> getActiveSubordinatesBySupervisorId(Long supervisorId) {
         return userRepository.findActiveSubordinatesBySupervisorId(supervisorId);

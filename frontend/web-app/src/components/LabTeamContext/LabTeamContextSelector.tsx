@@ -217,7 +217,7 @@ const LabTeamContextSelector: React.FC<LabTeamContextSelectorProps> = ({
 
       const token = localStorage.getItem('jwtToken');
       
-              const response = await fetch('http://localhost:8081/profile', {
+              const response = await fetch('http://localhost:12001/api/auth/profile', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'X-Username': username,
@@ -265,8 +265,8 @@ const LabTeamContextSelector: React.FC<LabTeamContextSelectorProps> = ({
     try {
       const token = localStorage.getItem('jwtToken');
       const endpoint = contextType === 'LAB' 
-        ? `http://localhost:8081/labs/${contextId}/file-stats`
-        : `http://localhost:8081/teams/${contextId}/file-stats`;
+        ? `http://localhost:12001/api/auth/labs/${contextId}/file-stats`
+        : `http://localhost:12001/api/auth/teams/${contextId}/file-stats`;
       
       const response = await fetch(endpoint, {
         headers: {
@@ -332,8 +332,8 @@ const LabTeamContextSelector: React.FC<LabTeamContextSelectorProps> = ({
         console.log('onContextChange called successfully');
         console.log('=== CONTEXT CHANGE END ===');
         
-        // Load context statistics
-        loadContextStats('LAB', lab.labId);
+        // Load context statistics - temporarily disabled due to backend issue
+        // loadContextStats('LAB', lab.labId);
       } else {
         console.error('Lab not found for ID:', numericId);
         // Don't set selectedContext if lab not found
@@ -352,8 +352,8 @@ const LabTeamContextSelector: React.FC<LabTeamContextSelectorProps> = ({
         console.log('Setting TEAM context:', context);
         
         onContextChange(context);
-        // Load context statistics
-        loadContextStats('TEAM', team.teamId);
+        // Load context statistics - temporarily disabled due to backend issue
+        // loadContextStats('TEAM', team.teamId);
       } else {
         console.error('Team not found for ID:', numericId);
         // Don't set selectedContext if team not found

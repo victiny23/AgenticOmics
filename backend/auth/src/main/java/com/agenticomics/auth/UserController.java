@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
+import java.util.HashMap;
 import java.time.LocalDateTime;
 import com.agenticomics.auth.dto.UserLabMembershipDto;
 import com.agenticomics.auth.dto.UserTeamMembershipDto;
@@ -1132,7 +1133,11 @@ public class UserController {
     @PostMapping("/admin/teams/auto-id")
     public ResponseEntity<?> createTeamWithAutoId(@RequestBody CreateTeamAutoIdRequest request, @RequestHeader("X-Username") String adminUsername) {
         try {
-            // Anyone can create teams
+            // Check if user has permission to create teams
+            if (!userService.canCreateTeam(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have permission to create teams. Only Lab PI, PhD Student, Master Student, Team Leader, and Senior Member can create teams.");
+            }
+            
             // Get the creator's user ID
             Optional<User> creatorOpt = userService.findByUsername(adminUsername);
             if (creatorOpt.isEmpty()) {
@@ -1824,6 +1829,230 @@ public class UserController {
             System.err.println("Error getting team file stats for teamId " + teamId + ": " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
+     * Check if user can delete a file based on role-based permissions
+     */
+    @PostMapping("/check-file-deletion-permission")
+    public ResponseEntity<Map<String, Object>> checkFileDeletionPermission(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader("X-Username") String username) {
+        try {
+            System.out.println("=== ENDPOINT CALLED ===");
+            System.out.println("Checking file deletion permission for user: " + username);
+            System.out.println("Request: " + request);
+            
+            String fileUploadedBy = (String) request.get("fileUploadedBy");
+            String uploadContext = (String) request.get("uploadContext");
+            Long labId = null;
+            Long teamId = null;
+            
+            if (request.get("labId") != null && !request.get("labId").toString().equals("null")) {
+                labId = Long.valueOf(request.get("labId").toString());
+            }
+            if (request.get("teamId") != null && !request.get("teamId").toString().equals("null")) {
+                teamId = Long.valueOf(request.get("teamId").toString());
+            }
+            
+            System.out.println("Parsed values - fileUploadedBy: " + fileUploadedBy + ", uploadContext: " + uploadContext + ", labId: " + labId + ", teamId: " + teamId);
+            
+            boolean canDelete = false;
+            String reason = "";
+            
+            // User can always delete their own files
+            if (username.equals(fileUploadedBy)) {
+                canDelete = true;
+                reason = "User owns the file";
+                System.out.println("User owns the file");
+            } else {
+                // Check if user is Lab PI and file belongs to their lab
+                if ("LAB".equals(uploadContext) && labId != null) {
+                    System.out.println("Checking Lab PI permissions for labId: " + labId);
+                    List<UserLabMembershipDto> labMemberships = userService.getUserLabMemberships(username);
+                    System.out.println("Found " + labMemberships.size() + " lab memberships");
+                    for (UserLabMembershipDto membership : labMemberships) {
+                        System.out.println("Membership: " + membership);
+                        System.out.println("Comparing labId: " + labId + " with membership.getLabId(): " + membership.getLabId());
+                        System.out.println("Comparing role: 'Lab PI' with membership.getRoleInLab(): '" + membership.getRoleInLab() + "'");
+                        if ("Lab PI".equals(membership.getRoleInLab()) && labId.equals(membership.getLabId())) {
+                            canDelete = true;
+                            reason = "User is Lab PI for this lab";
+                            System.out.println("User is Lab PI for this lab");
+                            break;
+                        }
+                    }
+                }
+                
+                // Check if user is Team Leader and file belongs to their team
+                if (!canDelete && "TEAM".equals(uploadContext) && teamId != null) {
+                    System.out.println("Checking Team Leader permissions for teamId: " + teamId);
+                    List<UserTeamMembershipDto> teamMemberships = userService.getUserTeamMemberships(username);
+                    System.out.println("Found " + teamMemberships.size() + " team memberships");
+                    for (UserTeamMembershipDto membership : teamMemberships) {
+                        System.out.println("Membership: " + membership);
+                        System.out.println("Comparing teamId: " + teamId + " with membership.getTeamId(): " + membership.getTeamId());
+                        System.out.println("Comparing role: 'Team Leader' with membership.getRoleInTeam(): '" + membership.getRoleInTeam() + "'");
+                        if ("Team Leader".equals(membership.getRoleInTeam()) && teamId.equals(membership.getTeamId())) {
+                            canDelete = true;
+                            reason = "User is Team Leader for this team";
+                            System.out.println("User is Team Leader for this team");
+                            break;
+                        }
+                    }
+                }
+                
+                if (!canDelete) {
+                    reason = "User does not have permission to delete this file";
+                    System.out.println("User does not have permission");
+                }
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("canDelete", canDelete);
+            response.put("reason", reason);
+            response.put("username", username);
+            response.put("fileUploadedBy", fileUploadedBy);
+            response.put("uploadContext", uploadContext);
+            response.put("labId", labId);
+            response.put("teamId", teamId);
+            
+            System.out.println("Response: " + response);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            System.err.println("Error in checkFileDeletionPermission: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to check file deletion permission: " + e.getMessage());
+            errorResponse.put("exception", e.getClass().getSimpleName());
+            errorResponse.put("details", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Check if user can access lab files (Lab PI or lab member)
+     */
+    @PostMapping("/check-lab-file-access")
+    public ResponseEntity<Map<String, Object>> checkLabFileAccess(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader("X-Username") String username) {
+        try {
+            System.out.println("=== LAB FILE ACCESS CHECK ===");
+            System.out.println("Checking lab file access for user: " + username);
+            System.out.println("Request: " + request);
+            
+            Long labId = null;
+            if (request.get("labId") != null && !request.get("labId").toString().equals("null")) {
+                labId = Long.valueOf(request.get("labId").toString());
+            }
+            
+            System.out.println("Lab ID: " + labId);
+            
+            boolean canView = false;
+            String reason = "";
+            
+            // Check if user is a member of this lab
+            List<UserLabMembershipDto> labMemberships = userService.getUserLabMemberships(username);
+            System.out.println("Found " + labMemberships.size() + " lab memberships");
+            
+            for (UserLabMembershipDto membership : labMemberships) {
+                System.out.println("Membership: " + membership);
+                System.out.println("Comparing labId: " + labId + " with membership.getLabId(): " + membership.getLabId());
+                
+                if (labId.equals(membership.getLabId())) {
+                    canView = true;
+                    reason = "User is a member of this lab with role: " + membership.getRoleInLab();
+                    System.out.println("User is a member of this lab");
+                    break;
+                }
+            }
+            
+            if (!canView) {
+                reason = "User is not a member of this lab";
+                System.out.println("User is not a member of this lab");
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("canView", canView);
+            response.put("reason", reason);
+            response.put("username", username);
+            response.put("labId", labId);
+            
+            System.out.println("Response: " + response);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            System.err.println("Error in checkLabFileAccess: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to check lab file access: " + e.getMessage());
+            errorResponse.put("exception", e.getClass().getSimpleName());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Check if user can access team files (Team Leader or team member)
+     */
+    @PostMapping("/check-team-file-access")
+    public ResponseEntity<Map<String, Object>> checkTeamFileAccess(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader("X-Username") String username) {
+        try {
+            System.out.println("=== TEAM FILE ACCESS CHECK ===");
+            System.out.println("Checking team file access for user: " + username);
+            System.out.println("Request: " + request);
+            
+            Long teamId = null;
+            if (request.get("teamId") != null && !request.get("teamId").toString().equals("null")) {
+                teamId = Long.valueOf(request.get("teamId").toString());
+            }
+            
+            System.out.println("Team ID: " + teamId);
+            
+            boolean canView = false;
+            String reason = "";
+            
+            // Check if user is a member of this team
+            List<UserTeamMembershipDto> teamMemberships = userService.getUserTeamMemberships(username);
+            System.out.println("Found " + teamMemberships.size() + " team memberships");
+            
+            for (UserTeamMembershipDto membership : teamMemberships) {
+                System.out.println("Membership: " + membership);
+                System.out.println("Comparing teamId: " + teamId + " with membership.getTeamId(): " + membership.getTeamId());
+                
+                if (teamId.equals(membership.getTeamId())) {
+                    canView = true;
+                    reason = "User is a member of this team with role: " + membership.getRoleInTeam();
+                    System.out.println("User is a member of this team");
+                    break;
+                }
+            }
+            
+            if (!canView) {
+                reason = "User is not a member of this team";
+                System.out.println("User is not a member of this team");
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("canView", canView);
+            response.put("reason", reason);
+            response.put("username", username);
+            response.put("teamId", teamId);
+            
+            System.out.println("Response: " + response);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            System.err.println("Error in checkTeamFileAccess: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to check team file access: " + e.getMessage());
+            errorResponse.put("exception", e.getClass().getSimpleName());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
 }
