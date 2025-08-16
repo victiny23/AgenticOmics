@@ -33,6 +33,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             path.startsWith("/api/auth/check-file-deletion-permission") ||
             path.startsWith("/api/auth/check-lab-file-access") ||
             path.startsWith("/api/auth/check-team-file-access") ||
+            path.startsWith("/api/auth/labs/my-lab-members") ||
+            path.startsWith("/api/auth/labs/") ||
+            path.startsWith("/api/auth/teams/") ||
+            path.startsWith("/api/auth/admin/users/all-with-organizations") ||
             path.startsWith("/uploads/") ||
             path.startsWith("/api/data/health")) {
             return chain.filter(exchange);

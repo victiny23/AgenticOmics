@@ -48,6 +48,8 @@ import {
   Add,
   Edit,
   Delete,
+  Assignment,
+  ExitToApp,
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -232,11 +234,31 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
     try {
       setLoadingMembers(prev => ({ ...prev, [`lab-${labId}`]: true }));
       const token = localStorage.getItem('jwtToken');
-      const response = await axios.get(`http://localhost:12001/api/auth/admin/labs/${labId}/members`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const currentUsername = localStorage.getItem('username');
+      
+      // Try admin endpoint first (for Lab PIs)
+      let response;
+      try {
+        response = await axios.get(`http://localhost:12001/api/auth/admin/labs/${labId}/members`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Username': currentUsername
+          },
+        });
+      } catch (adminErr: any) {
+        // If admin endpoint fails, try the regular user endpoint
+        if (adminErr.response?.status === 403) {
+          response = await axios.get(`http://localhost:12001/api/auth/labs/${labId}/members`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'X-Username': currentUsername
+            },
+          });
+        } else {
+          throw adminErr;
+        }
+      }
+      
       setLabMembers(prev => ({ ...prev, [labId]: response.data }));
     } catch (err: any) {
       console.error('Failed to fetch lab members:', err);
@@ -250,11 +272,31 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
     try {
       setLoadingMembers(prev => ({ ...prev, [`team-${teamId}`]: true }));
       const token = localStorage.getItem('jwtToken');
-      const response = await axios.get(`http://localhost:12001/api/auth/admin/teams/${teamId}/members`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const currentUsername = localStorage.getItem('username');
+      
+      // Try admin endpoint first (for Lab PIs)
+      let response;
+      try {
+        response = await axios.get(`http://localhost:12001/api/auth/admin/teams/${teamId}/members`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Username': currentUsername
+          },
+        });
+      } catch (adminErr: any) {
+        // If admin endpoint fails, try the regular user endpoint
+        if (adminErr.response?.status === 403) {
+          response = await axios.get(`http://localhost:12001/api/auth/teams/${teamId}/members`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'X-Username': currentUsername
+            },
+          });
+        } else {
+          throw adminErr;
+        }
+      }
+      
       setTeamMembers(prev => ({ ...prev, [teamId]: response.data }));
     } catch (err: any) {
       console.error('Failed to fetch team members:', err);
@@ -776,6 +818,48 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
             </TabPanel>
           </>
         )}
+
+        {/* Application and Management Actions */}
+        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Organization Management
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <Button
+                variant="outlined"
+                startIcon={<Assignment />}
+                onClick={() => {
+                  // This will open the application form
+                  window.open('/admin/users', '_blank');
+                }}
+                fullWidth
+                sx={{ mb: 1 }}
+              >
+                Apply to Join Lab
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<Assignment />}
+                onClick={() => {
+                  // This will open the applications panel
+                  window.open('/admin/users', '_blank');
+                }}
+                fullWidth
+              >
+                My Applications
+              </Button>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                • Apply to join new labs or teams<br/>
+                • View and manage your applications<br/>
+                • Leave current organizations<br/>
+                • Manage your memberships
+              </Typography>
+            </Grid>
+          </Grid>
+        </Box>
 
         {/* Summary */}
         <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>

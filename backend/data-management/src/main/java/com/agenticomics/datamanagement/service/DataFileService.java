@@ -54,6 +54,29 @@ public class DataFileService {
             // Validate file
             validateFile(file);
             
+            // Validate context is provided
+            if (uploadContext == null || uploadContext.trim().isEmpty()) {
+                throw new DataFileException("Upload context is required. Please select a lab or team context.");
+            }
+            
+            // Validate context-specific parameters
+            if ("LAB".equals(uploadContext)) {
+                if (labId == null || labName == null || labName.trim().isEmpty()) {
+                    throw new DataFileException("Lab ID and Lab Name are required when uploading to lab context.");
+                }
+            } else if ("TEAM".equals(uploadContext)) {
+                if (teamId == null || teamName == null || teamName.trim().isEmpty()) {
+                    throw new DataFileException("Team ID and Team Name are required when uploading to team context.");
+                }
+            } else {
+                throw new DataFileException("Invalid upload context. Must be either 'LAB' or 'TEAM'.");
+            }
+            
+            // Validate user has access to the context
+            if (!validateUserContextAccess(uploadedBy, uploadContext, labId, teamId)) {
+                throw new DataFileException("You don't have permission to upload files to this context. Please ensure you are a member of the selected lab/team.");
+            }
+            
             // Generate unique filename
             String originalFilename = file.getOriginalFilename();
             String fileExtension = getFileExtension(originalFilename);
@@ -555,6 +578,50 @@ public class DataFileService {
         } catch (Exception e) {
             log.error("Error checking team file access for user {} on team {}: {}", 
                 username, teamId, e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Validate that a user has access to upload to a specific lab or team context
+     */
+    private boolean validateUserContextAccess(String username, String uploadContext, Long labId, Long teamId) {
+        try {
+            String authServiceUrl = "http://localhost:12001/api/auth";
+            String endpoint;
+            
+            if ("LAB".equals(uploadContext)) {
+                endpoint = authServiceUrl + "/check-lab-file-access";
+            } else if ("TEAM".equals(uploadContext)) {
+                endpoint = authServiceUrl + "/check-team-file-access";
+            } else {
+                return false;
+            }
+            
+            Map<String, Object> requestBody = new HashMap<>();
+            if ("LAB".equals(uploadContext)) {
+                requestBody.put("labId", labId);
+            } else {
+                requestBody.put("teamId", teamId);
+            }
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-Username", username);
+            
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(endpoint, requestEntity, Map.class);
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Boolean canAccess = (Boolean) response.getBody().get("canView");
+                return canAccess != null && canAccess;
+            }
+            
+            return false;
+        } catch (Exception e) {
+            log.error("Error validating user context access for user {} on context {}: {}", 
+                username, uploadContext, e.getMessage());
             return false;
         }
     }

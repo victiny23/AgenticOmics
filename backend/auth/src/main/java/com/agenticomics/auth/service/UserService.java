@@ -3,6 +3,7 @@ package com.agenticomics.auth.service;
 import com.agenticomics.auth.dto.UserLabMembershipDto;
 import com.agenticomics.auth.entity.User;
 import com.agenticomics.auth.entity.UserLabMembership;
+import com.agenticomics.auth.entity.UserTeamMembership;
 import com.agenticomics.auth.repository.LabRepository;
 import com.agenticomics.auth.repository.UserRepository;
 import com.agenticomics.auth.entity.Lab;
@@ -19,6 +20,8 @@ import java.util.Optional;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 public class UserService {
@@ -43,6 +46,9 @@ public class UserService {
     
     @Autowired
     private com.agenticomics.auth.repository.UserLabMembershipRepository userLabMembershipRepository;
+    
+    @Autowired
+    private com.agenticomics.auth.repository.UserTeamMembershipRepository userTeamMembershipRepository;
     
     public User registerUser(String username, String password, String email, String telephone, String role) {
         // Check if user already exists
@@ -268,6 +274,52 @@ public class UserService {
             user.setTeamMemberships(null);
             user.setSubordinates(null);
             user.setSupervisor(null);
+        });
+        
+        return users;
+    }
+    
+    /**
+     * Get all users in the labs where the given user is a member
+     * This is for regular users (not just Lab PIs)
+     */
+    public List<User> getUsersInUserLabs(String username) {
+        Optional<User> userOpt = userRepository.findActiveUserByUsername(username);
+        if (userOpt.isEmpty()) {
+            throw new RuntimeException("User not found");
+        }
+        
+        User user = userOpt.get();
+        
+        // Get all labs where the user is a member
+        List<UserLabMembership> userLabMemberships = userLabMembershipRepository
+                .findByUserIdAndIsActiveTrue(user.getId());
+        
+        if (userLabMemberships.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        // Get all lab IDs where user is a member
+        List<Long> userLabIds = userLabMemberships.stream()
+                .map(membership -> membership.getLab().getId())
+                .collect(Collectors.toList());
+        
+        // Get all users who are members of these labs
+        List<UserLabMembership> allMemberships = userLabMembershipRepository
+                .findByLabIdInAndIsActiveTrue(userLabIds);
+        
+        // Extract unique users
+        Set<Long> userIds = allMemberships.stream()
+                .map(membership -> membership.getUser().getId())
+                .collect(Collectors.toSet());
+        
+        // Return users without their relationships to avoid circular references
+        List<User> users = userRepository.findAllById(userIds);
+        users.forEach(u -> {
+            u.setLabMemberships(null);
+            u.setTeamMemberships(null);
+            u.setSubordinates(null);
+            u.setSupervisor(null);
         });
         
         return users;
@@ -614,5 +666,54 @@ public class UserService {
         }
         
         labService.removeUserFromLab(userOpt.get().getId(), labOpt.get().getId());
+    }
+    
+    public List<Map<String, Object>> getAllUsersWithOrganizations() {
+        List<User> allUsers = userRepository.findAll();
+        List<Map<String, Object>> usersWithOrganizations = new ArrayList<>();
+        
+        for (User user : allUsers) {
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("id", user.getId());
+            userInfo.put("username", user.getUsername());
+            userInfo.put("email", user.getEmail());
+            userInfo.put("telephone", user.getTelephone());
+            userInfo.put("role", user.getRole());
+            userInfo.put("isActive", user.getIsActive());
+            userInfo.put("createdAt", user.getCreatedAt());
+            userInfo.put("lastLogin", user.getLastLogin());
+            
+            // Get lab memberships
+            List<UserLabMembership> labMemberships = userLabMembershipRepository.findByUserIdAndIsActiveTrue(user.getId());
+            List<Map<String, Object>> labInfo = new ArrayList<>();
+            for (UserLabMembership membership : labMemberships) {
+                Map<String, Object> lab = new HashMap<>();
+                lab.put("labId", membership.getLab().getId());
+                lab.put("labName", membership.getLab().getLabName());
+                lab.put("labCode", membership.getLab().getLabId());
+                lab.put("roleInLab", membership.getRoleInLab());
+                lab.put("isPrimaryLab", membership.getIsPrimaryLab());
+                labInfo.add(lab);
+            }
+            userInfo.put("labMemberships", labInfo);
+            
+            // Get team memberships
+            List<UserTeamMembership> teamMemberships = userTeamMembershipRepository.findByUserIdAndIsActiveTrue(user.getId());
+            List<Map<String, Object>> teamInfo = new ArrayList<>();
+            for (UserTeamMembership membership : teamMemberships) {
+                Map<String, Object> team = new HashMap<>();
+                team.put("teamId", membership.getTeam().getId());
+                team.put("teamName", membership.getTeam().getTeamName());
+                team.put("teamIdCode", membership.getTeam().getTeamId());
+                team.put("roleInTeam", membership.getRoleInTeam());
+                team.put("isPrimaryTeam", membership.getIsPrimaryTeam());
+                teamInfo.add(team);
+            }
+            userInfo.put("teamMemberships", teamInfo);
+            
+            usersWithOrganizations.add(userInfo);
+        }
+        
+        return usersWithOrganizations;
     }
 } 

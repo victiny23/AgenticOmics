@@ -82,6 +82,12 @@ const navigationItems: NavigationItem[] = [
     path: '/result',
     description: 'View and export analysis results',
   },
+  {
+    text: 'User Management',
+    icon: <AdminPanelSettings />,
+    path: '/admin/users',
+    description: 'Manage memberships and applications',
+  },
 ]
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {

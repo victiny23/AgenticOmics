@@ -30,6 +30,13 @@ import com.agenticomics.auth.repository.UserTeamMembershipRepository;
 import com.agenticomics.auth.repository.UserRepository;
 import com.agenticomics.auth.dto.LabDto;
 import com.agenticomics.auth.dto.TeamDto;
+import com.agenticomics.auth.dto.LabApplicationRequest;
+import com.agenticomics.auth.dto.LabApplicationResponse;
+import com.agenticomics.auth.dto.TeamApplicationRequest;
+import com.agenticomics.auth.dto.TeamApplicationResponse;
+import com.agenticomics.auth.dto.ApplicationReviewRequest;
+import com.agenticomics.auth.service.LabApplicationService;
+import com.agenticomics.auth.service.TeamApplicationService;
 
 @RestController
 public class UserController {
@@ -63,6 +70,12 @@ public class UserController {
     
     @Autowired
     private UserRepository userRepository;
+    
+    @Autowired
+    private LabApplicationService labApplicationService;
+    
+    @Autowired
+    private TeamApplicationService teamApplicationService;
     
     @Value("${app.upload-dir:./data/uploads/profile-photos}")
     private String uploadDir;
@@ -203,6 +216,20 @@ public class UserController {
             
             List<User> users = userService.getAllActiveUsers();
             return ResponseEntity.ok(new UserListResponse(users));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
+        }
+    }
+    
+    @GetMapping("/admin/users/all-with-organizations")
+    public ResponseEntity<?> getAllUsersWithOrganizations(@RequestHeader("X-Username") String adminUsername) {
+        try {
+            if (!userService.isUserPI(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PI users can access this endpoint");
+            }
+            
+            List<Map<String, Object>> usersWithOrganizations = userService.getAllUsersWithOrganizations();
+            return ResponseEntity.ok(new UserListWithOrganizationsResponse(usersWithOrganizations));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
         }
@@ -571,6 +598,17 @@ public class UserController {
         
         public List<User> getUsers() { return users; }
         public void setUsers(List<User> users) { this.users = users; }
+    }
+    
+    static class UserListWithOrganizationsResponse {
+        private List<Map<String, Object>> users;
+        
+        public UserListWithOrganizationsResponse(List<Map<String, Object>> users) {
+            this.users = users;
+        }
+        
+        public List<Map<String, Object>> getUsers() { return users; }
+        public void setUsers(List<Map<String, Object>> users) { this.users = users; }
     }
     
     static class UserStatusResponse {
@@ -2053,6 +2091,195 @@ public class UserController {
             errorResponse.put("error", "Failed to check team file access: " + e.getMessage());
             errorResponse.put("exception", e.getClass().getSimpleName());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+    /**
+     * Get lab members for regular users (non-admin)
+     * Allows any lab member to see other members in their lab
+     */
+    @GetMapping("/labs/my-lab-members")
+    public ResponseEntity<?> getMyLabMembersAsUser(@RequestHeader("X-Username") String username) {
+        try {
+            // Get all users in the user's labs
+            List<User> labMembers = userService.getUsersInUserLabs(username);
+            
+            // Convert to simple user info to avoid circular references
+            List<java.util.Map<String, Object>> userList = labMembers.stream()
+                    .map(user -> new java.util.HashMap<String, Object>() {{
+                        put("id", user.getId());
+                        put("username", user.getUsername());
+                        put("email", user.getEmail());
+                        put("role", user.getRole());
+                        put("isActive", user.getIsActive());
+                        put("telephone", user.getTelephone());
+                    }})
+                    .collect(java.util.stream.Collectors.toList());
+            
+            return ResponseEntity.ok(new java.util.HashMap<String, Object>() {{
+                put("users", userList);
+                put("count", userList.size());
+            }});
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving lab members: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get lab members for regular users (non-admin)
+     * Allows any lab member to see other members in their lab
+     */
+    @GetMapping("/labs/{labId}/members")
+    public ResponseEntity<?> getLabMembersAsUser(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            // Check if user is a member of this lab
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            boolean hasAccess = labService.isUserMemberOfLab(userOpt.get().getId(), labId);
+            if (!hasAccess) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have access to this lab");
+            }
+            
+            List<UserLabMembershipDto> members = labService.getLabMembers(labId);
+            return ResponseEntity.ok(members);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get lab members: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get team members for regular users (non-admin)
+     * Allows any team member to see other members in their team
+     */
+    @GetMapping("/teams/{teamId}/members")
+    public ResponseEntity<?> getTeamMembersAsUser(@PathVariable Long teamId, @RequestHeader("X-Username") String username) {
+        try {
+            // Check if user is a member of this team
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            boolean hasAccess = teamService.isUserMemberOfTeam(userOpt.get().getId(), teamId);
+            if (!hasAccess) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have access to this team");
+            }
+            
+            List<UserTeamMembershipDto> members = teamService.getTeamMembers(teamId);
+            return ResponseEntity.ok(members);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get team members: " + e.getMessage());
+        }
+    }
+    
+    // ==================== LAB APPLICATION ENDPOINTS ====================
+    
+    /**
+     * Apply to join a lab
+     */
+    @PostMapping("/labs/apply")
+    public ResponseEntity<?> applyToLab(@RequestBody LabApplicationRequest request, @RequestHeader("X-Username") String username) {
+        try {
+            LabApplicationResponse response = labApplicationService.applyToLab(username, request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Review a lab application (approve/reject)
+     */
+    @PostMapping("/labs/applications/{applicationId}/review")
+    public ResponseEntity<?> reviewLabApplication(@PathVariable Long applicationId, 
+                                                 @RequestBody ApplicationReviewRequest request, 
+                                                 @RequestHeader("X-Username") String username) {
+        try {
+            LabApplicationResponse response = labApplicationService.reviewApplication(applicationId, username, request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Withdraw a lab application
+     */
+    @DeleteMapping("/labs/applications/{applicationId}")
+    public ResponseEntity<?> withdrawLabApplication(@PathVariable Long applicationId, @RequestHeader("X-Username") String username) {
+        try {
+            labApplicationService.withdrawApplication(applicationId, username);
+            return ResponseEntity.ok("Application withdrawn successfully");
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get all applications for a lab (for PI)
+     */
+    @GetMapping("/labs/{labId}/applications")
+    public ResponseEntity<?> getLabApplications(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            List<LabApplicationResponse> applications = labApplicationService.getLabApplications(labId, username);
+            return ResponseEntity.ok(applications);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get pending applications for a lab (for PI)
+     */
+    @GetMapping("/labs/{labId}/applications/pending")
+    public ResponseEntity<?> getPendingLabApplications(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            List<LabApplicationResponse> applications = labApplicationService.getPendingLabApplications(labId, username);
+            return ResponseEntity.ok(applications);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get user's lab applications
+     */
+    @GetMapping("/labs/applications/my")
+    public ResponseEntity<?> getMyLabApplications(@RequestHeader("X-Username") String username) {
+        try {
+            List<LabApplicationResponse> applications = labApplicationService.getUserApplications(username);
+            return ResponseEntity.ok(applications);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get user's pending lab applications
+     */
+    @GetMapping("/labs/applications/my/pending")
+    public ResponseEntity<?> getMyPendingLabApplications(@RequestHeader("X-Username") String username) {
+        try {
+            List<LabApplicationResponse> applications = labApplicationService.getUserPendingApplications(username);
+            return ResponseEntity.ok(applications);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Leave a lab
+     */
+    @DeleteMapping("/labs/{labId}/leave")
+    public ResponseEntity<?> leaveLab(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            labApplicationService.leaveLab(labId, username);
+            return ResponseEntity.ok("Successfully left the lab");
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
 }
