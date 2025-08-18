@@ -15,6 +15,7 @@ import ResultPage from './pages/ResultPage'
 import LoginPage from './pages/LoginPage'
 import RestrictedDashboardPage from './pages/RestrictedDashboardPage'
 import UserManagementPage from './pages/UserManagementPage'
+import SystemAdministrationPage from './pages/SystemAdministrationPage'
 import SettingsPage from './pages/SettingsPage'
 
 function App() {
@@ -43,6 +44,13 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <UserManagementPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/system" element={
+            <ProtectedRoute>
+              <Layout>
+                <SystemAdministrationPage />
               </Layout>
             </ProtectedRoute>
           } />

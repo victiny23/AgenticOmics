@@ -112,7 +112,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
 
-      const response = await fetch(`http://localhost:12001/api/auth/admin/users/status/${currentUsername}`, {
+      // Use the regular profile endpoint instead of admin endpoint
+      const response = await fetch(`http://localhost:12001/api/auth/profile`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

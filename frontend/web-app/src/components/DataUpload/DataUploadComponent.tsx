@@ -34,6 +34,7 @@ import {
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
+import LabTeamContextSelector from '../LabTeamContext/LabTeamContextSelector';
 
 interface UploadFile {
   file: File;
@@ -71,8 +72,27 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
 
   const { username } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Lab/Team context state
+  const [currentContext, setCurrentContext] = useState<{
+    type: 'LAB' | 'TEAM';
+    id: number;
+    name: string;
+    code: string;
+    role: string;
+  } | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    // Check if context is selected
+    if (!currentContext) {
+      setSnackbar({
+        open: true,
+        message: 'Please select a lab/team context before adding files',
+        severity: 'error',
+      });
+      return;
+    }
+
     const newFiles: UploadFile[] = acceptedFiles.map(file => ({
       file,
       id: Math.random().toString(36).substr(2, 9),
@@ -81,7 +101,14 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
     }));
 
     setUploadFiles(prev => [...prev, ...newFiles]);
-  }, []);
+    
+    // Show success message
+    setSnackbar({
+      open: true,
+      message: `${acceptedFiles.length} file(s) added to upload queue for ${currentContext.name}`,
+      severity: 'success',
+    });
+  }, [currentContext]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -118,6 +145,22 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
       return;
     }
 
+    if (!currentContext) {
+      setSnackbar({
+        open: true,
+        message: 'Please select a lab/team context before uploading files',
+        severity: 'error',
+      });
+      return;
+    }
+
+    // Show context confirmation
+    setSnackbar({
+      open: true,
+      message: `File will be uploaded to ${currentContext.name} (${currentContext.type})`,
+      severity: 'info',
+    });
+
     setSelectedFile(uploadFile);
     setShowUploadDialog(true);
   };
@@ -141,6 +184,18 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
     formData.append('tags', uploadMetadata.tags);
     formData.append('isPublic', uploadMetadata.isPublic.toString());
     formData.append('metadata', uploadMetadata.metadata);
+    
+    // Add lab/team context
+    if (currentContext) {
+      formData.append('uploadContext', currentContext.type);
+      if (currentContext.type === 'LAB') {
+        formData.append('labId', currentContext.id.toString());
+        formData.append('labName', currentContext.name);
+      } else {
+        formData.append('teamId', currentContext.id.toString());
+        formData.append('teamName', currentContext.name);
+      }
+    }
 
     // Create abort controller for this upload
     abortControllerRef.current = new AbortController();
@@ -286,6 +341,12 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
 
   return (
     <Box>
+      {/* Lab/Team Context Selector */}
+      <LabTeamContextSelector
+        onContextChange={setCurrentContext}
+        currentContext={currentContext}
+      />
+      
       {/* Upload Area */}
       <Paper
         {...getRootProps()}
@@ -293,35 +354,75 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
           p: 4,
           textAlign: 'center',
           border: '2px dashed',
-          borderColor: isDragActive ? '#1976d2' : '#ccc',
+          borderColor: currentContext ? (isDragActive ? '#1976d2' : '#ccc') : '#ff6b6b',
           borderRadius: 2,
-          backgroundColor: isDragActive ? '#f0f7ff' : '#fafafa',
-          cursor: 'pointer',
+          backgroundColor: currentContext ? (isDragActive ? '#f0f7ff' : '#fafafa') : '#fff5f5',
+          cursor: currentContext ? 'pointer' : 'not-allowed',
           transition: 'all 0.3s ease',
           mb: 3,
+          opacity: currentContext ? 1 : 0.7,
         }}
       >
-        <input {...getInputProps()} />
-        <CloudUpload sx={{ fontSize: 64, color: '#1976d2', mb: 2 }} />
-        <Typography variant="h6" gutterBottom>
-          {isDragActive ? 'Drop files here' : 'Drag and drop your files here'}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          or click to browse and select files
-        </Typography>
-                 <Typography variant="caption" color="text.secondary">
-                                Supported formats: FASTQ, FASTA, BAM/SAM, VCF, CSV/TSV, Excel, BED, GTF/GFF, JSON, XML, ZIP, TXT
-         </Typography>
-        <Typography variant="caption" display="block" color="text.secondary">
-          Maximum file size: 100MB per file
-        </Typography>
+        <input {...getInputProps()} disabled={!currentContext} />
+        <CloudUpload sx={{ 
+          fontSize: 64, 
+          color: currentContext ? '#1976d2' : '#ff6b6b', 
+          mb: 2 
+        }} />
+        
+        {currentContext ? (
+          <>
+            <Typography variant="h6" gutterBottom>
+              {isDragActive ? 'Drop files here' : 'Drag and drop your files here'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              or click to browse and select files
+            </Typography>
+            <Typography variant="body2" color="primary" sx={{ mb: 2, fontWeight: 'bold' }}>
+              📁 Uploading to: {currentContext.name} ({currentContext.type})
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Supported formats: FASTQ, FASTA, BAM/SAM, VCF, CSV/TSV, Excel, BED, GTF/GFF, JSON, XML, ZIP, TXT
+            </Typography>
+            <Typography variant="caption" display="block" color="text.secondary">
+              Maximum file size: 100MB per file
+            </Typography>
+          </>
+        ) : (
+          <>
+            <Typography variant="h6" gutterBottom color="error">
+              ⚠️ Lab/Team Context Required
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Please select a lab or team context above before uploading files
+            </Typography>
+            <Typography variant="body2" color="error" sx={{ fontWeight: 'bold' }}>
+              Files cannot be uploaded without a context
+            </Typography>
+          </>
+        )}
       </Paper>
+
+      {/* Context Warning */}
+      {uploadFiles.length > 0 && !currentContext && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            <strong>⚠️ Context Required:</strong> You have {uploadFiles.length} file(s) in the upload queue, 
+            but no lab/team context is selected. Please select a context above to proceed with uploads.
+          </Typography>
+        </Alert>
+      )}
 
       {/* File List */}
       {uploadFiles.length > 0 && (
         <Paper sx={{ p: 2 }}>
           <Typography variant="h6" gutterBottom>
             Files to Upload ({uploadFiles.length})
+            {currentContext && (
+              <Typography component="span" variant="body2" color="primary" sx={{ ml: 1 }}>
+                → {currentContext.name} ({currentContext.type})
+              </Typography>
+            )}
           </Typography>
           <List>
             {uploadFiles.map((uploadFile) => (
@@ -371,7 +472,8 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
                       variant="contained"
                       size="small"
                       onClick={() => handleUpload(uploadFile)}
-                      disabled={uploading}
+                      disabled={uploading || !currentContext}
+                      title={!currentContext ? "Please select a lab/team context first" : ""}
                     >
                       Upload
                     </Button>

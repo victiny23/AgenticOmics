@@ -33,6 +33,13 @@ public class DataFileResponse {
     private String checksum;
     private String downloadUrl;
     
+    // Lab/Team context fields
+    private Long labId;
+    private String labName;
+    private Long teamId;
+    private String teamName;
+    private String uploadContext;
+    
     public static DataFileResponse fromEntity(DataFile dataFile) {
         return DataFileResponse.builder()
                 .id(dataFile.getId())
@@ -52,6 +59,11 @@ public class DataFileResponse {
                 .validationMessage(dataFile.getValidationMessage())
                 .metadata(dataFile.getMetadata())
                 .checksum(dataFile.getChecksum())
+                .labId(dataFile.getLabId())
+                .labName(dataFile.getLabName())
+                .teamId(dataFile.getTeamId())
+                .teamName(dataFile.getTeamName())
+                .uploadContext(dataFile.getUploadContext())
                 .build();
     }
 } 

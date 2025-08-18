@@ -14,6 +14,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
+import java.util.HashMap;
+import java.time.LocalDateTime;
 import com.agenticomics.auth.dto.UserLabMembershipDto;
 import com.agenticomics.auth.dto.UserTeamMembershipDto;
 import com.agenticomics.auth.service.LabService;
@@ -27,6 +30,13 @@ import com.agenticomics.auth.repository.UserTeamMembershipRepository;
 import com.agenticomics.auth.repository.UserRepository;
 import com.agenticomics.auth.dto.LabDto;
 import com.agenticomics.auth.dto.TeamDto;
+import com.agenticomics.auth.dto.LabApplicationRequest;
+import com.agenticomics.auth.dto.LabApplicationResponse;
+import com.agenticomics.auth.dto.TeamApplicationRequest;
+import com.agenticomics.auth.dto.TeamApplicationResponse;
+import com.agenticomics.auth.dto.ApplicationReviewRequest;
+import com.agenticomics.auth.service.LabApplicationService;
+import com.agenticomics.auth.service.TeamApplicationService;
 
 @RestController
 public class UserController {
@@ -60,6 +70,12 @@ public class UserController {
     
     @Autowired
     private UserRepository userRepository;
+    
+    @Autowired
+    private LabApplicationService labApplicationService;
+    
+    @Autowired
+    private TeamApplicationService teamApplicationService;
     
     @Value("${app.upload-dir:./data/uploads/profile-photos}")
     private String uploadDir;
@@ -205,6 +221,20 @@ public class UserController {
         }
     }
     
+    @GetMapping("/admin/users/all-with-organizations")
+    public ResponseEntity<?> getAllUsersWithOrganizations(@RequestHeader("X-Username") String adminUsername) {
+        try {
+            if (!userService.isUserPI(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PI users can access this endpoint");
+            }
+            
+            List<Map<String, Object>> usersWithOrganizations = userService.getAllUsersWithOrganizations();
+            return ResponseEntity.ok(new UserListWithOrganizationsResponse(usersWithOrganizations));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
+        }
+    }
+    
     @GetMapping("/admin/users/non-pi")
     public ResponseEntity<?> getNonPIUsers(@RequestHeader("X-Username") String adminUsername) {
         try {
@@ -228,6 +258,23 @@ public class UserController {
             
             List<User> users = userService.getAllNonPIUsers();
             return ResponseEntity.ok(new UserListResponse(users));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Super Admin endpoint to get all users with their lab and team memberships
+     */
+    @GetMapping("/admin/system/users/all-with-organizations")
+    public ResponseEntity<?> getAllUsersWithOrganizationsForSuperAdmin(@RequestHeader("X-Username") String adminUsername) {
+        try {
+            if (!userService.isSuperAdmin(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            List<Map<String, Object>> usersWithOrganizations = userService.getAllUsersWithOrganizations();
+            return ResponseEntity.ok(usersWithOrganizations);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
         }
@@ -265,6 +312,46 @@ public class UserController {
     public ResponseEntity<String> activateUser(@PathVariable Long userId, @RequestHeader("X-Username") String adminUsername) {
         try {
             boolean success = userService.activateUser(userId, adminUsername);
+            if (success) {
+                return ResponseEntity.ok("User activated successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Failed to activate user");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    /**
+     * Super Admin endpoint to deactivate any user account
+     */
+    @PostMapping("/admin/system/users/{userId}/deactivate")
+    public ResponseEntity<String> deactivateUserBySuperAdmin(@PathVariable Long userId, @RequestHeader("X-Username") String adminUsername) {
+        try {
+            if (!userService.isSuperAdmin(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            boolean success = userService.deactivateUserBySuperAdmin(userId, adminUsername);
+            if (success) {
+                return ResponseEntity.ok("User deactivated successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Failed to deactivate user");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    /**
+     * Super Admin endpoint to activate any user account
+     */
+    @PostMapping("/admin/system/users/{userId}/activate")
+    public ResponseEntity<String> activateUserBySuperAdmin(@PathVariable Long userId, @RequestHeader("X-Username") String adminUsername) {
+        try {
+            if (!userService.isSuperAdmin(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            boolean success = userService.activateUserBySuperAdmin(userId, adminUsername);
             if (success) {
                 return ResponseEntity.ok("User activated successfully");
             } else {
@@ -568,6 +655,17 @@ public class UserController {
         
         public List<User> getUsers() { return users; }
         public void setUsers(List<User> users) { this.users = users; }
+    }
+    
+    static class UserListWithOrganizationsResponse {
+        private List<Map<String, Object>> users;
+        
+        public UserListWithOrganizationsResponse(List<Map<String, Object>> users) {
+            this.users = users;
+        }
+        
+        public List<Map<String, Object>> getUsers() { return users; }
+        public void setUsers(List<Map<String, Object>> users) { this.users = users; }
     }
     
     static class UserStatusResponse {
@@ -1130,7 +1228,11 @@ public class UserController {
     @PostMapping("/admin/teams/auto-id")
     public ResponseEntity<?> createTeamWithAutoId(@RequestBody CreateTeamAutoIdRequest request, @RequestHeader("X-Username") String adminUsername) {
         try {
-            // Anyone can create teams
+            // Check if user has permission to create teams
+            if (!userService.canCreateTeam(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have permission to create teams. Only Lab PI, PhD Student, Master Student, Team Leader, and Senior Member can create teams.");
+            }
+            
             // Get the creator's user ID
             Optional<User> creatorOpt = userService.findByUsername(adminUsername);
             if (creatorOpt.isEmpty()) {
@@ -1693,5 +1795,776 @@ public class UserController {
         public void setTeamDescription(String teamDescription) { this.teamDescription = teamDescription; }
         public Long getLabId() { return labId; }
         public void setLabId(Long labId) { this.labId = labId; }
+    }
+    
+    /**
+     * Update lab file statistics when a file is uploaded
+     */
+    @PostMapping("/labs/{labId}/file-stats")
+    public ResponseEntity<String> updateLabFileStats(
+            @PathVariable Long labId,
+            @RequestBody Map<String, Object> request) {
+        try {
+            Optional<Lab> labOpt = labRepository.findById(labId);
+            if (labOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Lab not found");
+            }
+            
+            Lab lab = labOpt.get();
+            Long fileSize = Long.valueOf(request.get("fileSize").toString());
+            
+            // Update file statistics
+            lab.setFileCount(lab.getFileCount() + 1);
+            lab.setTotalFileSize(lab.getTotalFileSize() + fileSize);
+            lab.setLastFileUpload(LocalDateTime.now());
+            
+            labRepository.save(lab);
+            
+            return ResponseEntity.ok("Lab file statistics updated successfully");
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Failed to update lab file statistics: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Update team file statistics when a file is uploaded
+     */
+    @PostMapping("/teams/{teamId}/file-stats")
+    public ResponseEntity<String> updateTeamFileStats(
+            @PathVariable Long teamId,
+            @RequestBody Map<String, Object> request) {
+        try {
+            Optional<Team> teamOpt = teamRepository.findById(teamId);
+            if (teamOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Team not found");
+            }
+            
+            Team team = teamOpt.get();
+            Long fileSize = Long.valueOf(request.get("fileSize").toString());
+            
+            // Update file statistics
+            team.setFileCount(team.getFileCount() + 1);
+            team.setTotalFileSize(team.getTotalFileSize() + fileSize);
+            team.setLastFileUpload(LocalDateTime.now());
+            
+            teamRepository.save(team);
+            
+            return ResponseEntity.ok("Team file statistics updated successfully");
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Failed to update team file statistics: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get lab file statistics
+     */
+    @GetMapping("/labs/{labId}/file-stats")
+    public ResponseEntity<Map<String, Object>> getLabFileStats(@PathVariable Long labId) {
+        try {
+            Optional<Lab> labOpt = labRepository.findById(labId);
+            if (labOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            
+            Lab lab = labOpt.get();
+            
+            // Ensure we have safe values
+            Long fileCount = lab.getFileCount() != null ? lab.getFileCount() : 0L;
+            Long totalFileSize = lab.getTotalFileSize() != null ? lab.getTotalFileSize() : 0L;
+            
+            Map<String, Object> stats = Map.of(
+                "labId", lab.getId(),
+                "labName", lab.getLabName(),
+                "fileCount", fileCount,
+                "totalFileSize", totalFileSize,
+                "lastFileUpload", lab.getLastFileUpload()
+            );
+            
+            return ResponseEntity.ok(stats);
+            
+        } catch (Exception e) {
+            System.err.println("Error getting lab file stats for labId " + labId + ": " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
+     * Get team file statistics
+     */
+    @GetMapping("/teams/{teamId}/file-stats")
+    public ResponseEntity<Map<String, Object>> getTeamFileStats(@PathVariable Long teamId) {
+        try {
+            Optional<Team> teamOpt = teamRepository.findById(teamId);
+            if (teamOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            
+            Team team = teamOpt.get();
+            
+            // Ensure we have safe values
+            Long fileCount = team.getFileCount() != null ? team.getFileCount() : 0L;
+            Long totalFileSize = team.getTotalFileSize() != null ? team.getTotalFileSize() : 0L;
+            
+            Map<String, Object> stats = Map.of(
+                "teamId", team.getId(),
+                "teamName", team.getTeamName(),
+                "fileCount", fileCount,
+                "totalFileSize", totalFileSize,
+                "lastFileUpload", team.getLastFileUpload()
+            );
+            
+            return ResponseEntity.ok(stats);
+            
+        } catch (Exception e) {
+            System.err.println("Error getting team file stats for teamId " + teamId + ": " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
+     * Check if user can delete a file based on role-based permissions
+     */
+    @PostMapping("/check-file-deletion-permission")
+    public ResponseEntity<Map<String, Object>> checkFileDeletionPermission(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader("X-Username") String username) {
+        try {
+            System.out.println("=== ENDPOINT CALLED ===");
+            System.out.println("Checking file deletion permission for user: " + username);
+            System.out.println("Request: " + request);
+            
+            String fileUploadedBy = (String) request.get("fileUploadedBy");
+            String uploadContext = (String) request.get("uploadContext");
+            Long labId = null;
+            Long teamId = null;
+            
+            if (request.get("labId") != null && !request.get("labId").toString().equals("null")) {
+                labId = Long.valueOf(request.get("labId").toString());
+            }
+            if (request.get("teamId") != null && !request.get("teamId").toString().equals("null")) {
+                teamId = Long.valueOf(request.get("teamId").toString());
+            }
+            
+            System.out.println("Parsed values - fileUploadedBy: " + fileUploadedBy + ", uploadContext: " + uploadContext + ", labId: " + labId + ", teamId: " + teamId);
+            
+            boolean canDelete = false;
+            String reason = "";
+            
+            // User can always delete their own files
+            if (username.equals(fileUploadedBy)) {
+                canDelete = true;
+                reason = "User owns the file";
+                System.out.println("User owns the file");
+            } else {
+                // Check if user is Lab PI and file belongs to their lab
+                if ("LAB".equals(uploadContext) && labId != null) {
+                    System.out.println("Checking Lab PI permissions for labId: " + labId);
+                    List<UserLabMembershipDto> labMemberships = userService.getUserLabMemberships(username);
+                    System.out.println("Found " + labMemberships.size() + " lab memberships");
+                    for (UserLabMembershipDto membership : labMemberships) {
+                        System.out.println("Membership: " + membership);
+                        System.out.println("Comparing labId: " + labId + " with membership.getLabId(): " + membership.getLabId());
+                        System.out.println("Comparing role: 'Lab PI' with membership.getRoleInLab(): '" + membership.getRoleInLab() + "'");
+                        if ("Lab PI".equals(membership.getRoleInLab()) && labId.equals(membership.getLabId())) {
+                            canDelete = true;
+                            reason = "User is Lab PI for this lab";
+                            System.out.println("User is Lab PI for this lab");
+                            break;
+                        }
+                    }
+                }
+                
+                // Check if user is Team Leader and file belongs to their team
+                if (!canDelete && "TEAM".equals(uploadContext) && teamId != null) {
+                    System.out.println("Checking Team Leader permissions for teamId: " + teamId);
+                    List<UserTeamMembershipDto> teamMemberships = userService.getUserTeamMemberships(username);
+                    System.out.println("Found " + teamMemberships.size() + " team memberships");
+                    for (UserTeamMembershipDto membership : teamMemberships) {
+                        System.out.println("Membership: " + membership);
+                        System.out.println("Comparing teamId: " + teamId + " with membership.getTeamId(): " + membership.getTeamId());
+                        System.out.println("Comparing role: 'Team Leader' with membership.getRoleInTeam(): '" + membership.getRoleInTeam() + "'");
+                        if ("Team Leader".equals(membership.getRoleInTeam()) && teamId.equals(membership.getTeamId())) {
+                            canDelete = true;
+                            reason = "User is Team Leader for this team";
+                            System.out.println("User is Team Leader for this team");
+                            break;
+                        }
+                    }
+                }
+                
+                if (!canDelete) {
+                    reason = "User does not have permission to delete this file";
+                    System.out.println("User does not have permission");
+                }
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("canDelete", canDelete);
+            response.put("reason", reason);
+            response.put("username", username);
+            response.put("fileUploadedBy", fileUploadedBy);
+            response.put("uploadContext", uploadContext);
+            response.put("labId", labId);
+            response.put("teamId", teamId);
+            
+            System.out.println("Response: " + response);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            System.err.println("Error in checkFileDeletionPermission: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to check file deletion permission: " + e.getMessage());
+            errorResponse.put("exception", e.getClass().getSimpleName());
+            errorResponse.put("details", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Check if user can access lab files (Lab PI or lab member)
+     */
+    @PostMapping("/check-lab-file-access")
+    public ResponseEntity<Map<String, Object>> checkLabFileAccess(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader("X-Username") String username) {
+        try {
+            System.out.println("=== LAB FILE ACCESS CHECK ===");
+            System.out.println("Checking lab file access for user: " + username);
+            System.out.println("Request: " + request);
+            
+            Long labId = null;
+            if (request.get("labId") != null && !request.get("labId").toString().equals("null")) {
+                labId = Long.valueOf(request.get("labId").toString());
+            }
+            
+            System.out.println("Lab ID: " + labId);
+            
+            boolean canView = false;
+            String reason = "";
+            
+            // Check if user is a member of this lab
+            List<UserLabMembershipDto> labMemberships = userService.getUserLabMemberships(username);
+            System.out.println("Found " + labMemberships.size() + " lab memberships");
+            
+            for (UserLabMembershipDto membership : labMemberships) {
+                System.out.println("Membership: " + membership);
+                System.out.println("Comparing labId: " + labId + " with membership.getLabId(): " + membership.getLabId());
+                
+                if (labId.equals(membership.getLabId())) {
+                    canView = true;
+                    reason = "User is a member of this lab with role: " + membership.getRoleInLab();
+                    System.out.println("User is a member of this lab");
+                    break;
+                }
+            }
+            
+            if (!canView) {
+                reason = "User is not a member of this lab";
+                System.out.println("User is not a member of this lab");
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("canView", canView);
+            response.put("reason", reason);
+            response.put("username", username);
+            response.put("labId", labId);
+            
+            System.out.println("Response: " + response);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            System.err.println("Error in checkLabFileAccess: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to check lab file access: " + e.getMessage());
+            errorResponse.put("exception", e.getClass().getSimpleName());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Check if user can access team files (Team Leader or team member)
+     */
+    @PostMapping("/check-team-file-access")
+    public ResponseEntity<Map<String, Object>> checkTeamFileAccess(
+            @RequestBody Map<String, Object> request,
+            @RequestHeader("X-Username") String username) {
+        try {
+            System.out.println("=== TEAM FILE ACCESS CHECK ===");
+            System.out.println("Checking team file access for user: " + username);
+            System.out.println("Request: " + request);
+            
+            Long teamId = null;
+            if (request.get("teamId") != null && !request.get("teamId").toString().equals("null")) {
+                teamId = Long.valueOf(request.get("teamId").toString());
+            }
+            
+            System.out.println("Team ID: " + teamId);
+            
+            boolean canView = false;
+            String reason = "";
+            
+            // Check if user is a member of this team
+            List<UserTeamMembershipDto> teamMemberships = userService.getUserTeamMemberships(username);
+            System.out.println("Found " + teamMemberships.size() + " team memberships");
+            
+            for (UserTeamMembershipDto membership : teamMemberships) {
+                System.out.println("Membership: " + membership);
+                System.out.println("Comparing teamId: " + teamId + " with membership.getTeamId(): " + membership.getTeamId());
+                
+                if (teamId.equals(membership.getTeamId())) {
+                    canView = true;
+                    reason = "User is a member of this team with role: " + membership.getRoleInTeam();
+                    System.out.println("User is a member of this team");
+                    break;
+                }
+            }
+            
+            if (!canView) {
+                reason = "User is not a member of this team";
+                System.out.println("User is not a member of this team");
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("canView", canView);
+            response.put("reason", reason);
+            response.put("username", username);
+            response.put("teamId", teamId);
+            
+            System.out.println("Response: " + response);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            System.err.println("Error in checkTeamFileAccess: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to check team file access: " + e.getMessage());
+            errorResponse.put("exception", e.getClass().getSimpleName());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+    /**
+     * Get lab members for regular users (non-admin)
+     * Allows any lab member to see other members in their lab
+     */
+    @GetMapping("/labs/my-lab-members")
+    public ResponseEntity<?> getMyLabMembersAsUser(@RequestHeader("X-Username") String username) {
+        try {
+            // Get all users in the user's labs
+            List<User> labMembers = userService.getUsersInUserLabs(username);
+            
+            // Convert to simple user info to avoid circular references
+            List<java.util.Map<String, Object>> userList = labMembers.stream()
+                    .map(user -> new java.util.HashMap<String, Object>() {{
+                        put("id", user.getId());
+                        put("username", user.getUsername());
+                        put("email", user.getEmail());
+                        put("role", user.getRole());
+                        put("isActive", user.getIsActive());
+                        put("telephone", user.getTelephone());
+                    }})
+                    .collect(java.util.stream.Collectors.toList());
+            
+            return ResponseEntity.ok(new java.util.HashMap<String, Object>() {{
+                put("users", userList);
+                put("count", userList.size());
+            }});
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving lab members: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get lab members for regular users (non-admin)
+     * Allows any lab member to see other members in their lab
+     */
+    @GetMapping("/labs/{labId}/members")
+    public ResponseEntity<?> getLabMembersAsUser(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            // Check if user is a member of this lab
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            boolean hasAccess = labService.isUserMemberOfLab(userOpt.get().getId(), labId);
+            if (!hasAccess) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have access to this lab");
+            }
+            
+            List<UserLabMembershipDto> members = labService.getLabMembers(labId);
+            return ResponseEntity.ok(members);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get lab members: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get team members for regular users (non-admin)
+     * Allows any team member to see other members in their team
+     */
+    @GetMapping("/teams/{teamId}/members")
+    public ResponseEntity<?> getTeamMembersAsUser(@PathVariable Long teamId, @RequestHeader("X-Username") String username) {
+        try {
+            // Check if user is a member of this team
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            boolean hasAccess = teamService.isUserMemberOfTeam(userOpt.get().getId(), teamId);
+            if (!hasAccess) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have access to this team");
+            }
+            
+            List<UserTeamMembershipDto> members = teamService.getTeamMembers(teamId);
+            return ResponseEntity.ok(members);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get team members: " + e.getMessage());
+        }
+    }
+    
+    // ==================== LAB APPLICATION ENDPOINTS ====================
+    
+    /**
+     * Apply to join a lab
+     */
+    @PostMapping("/labs/apply")
+    public ResponseEntity<?> applyToLab(@RequestBody LabApplicationRequest request, @RequestHeader("X-Username") String username) {
+        try {
+            LabApplicationResponse response = labApplicationService.applyToLab(username, request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Review a lab application (approve/reject)
+     */
+    @PostMapping("/labs/applications/{applicationId}/review")
+    public ResponseEntity<?> reviewLabApplication(@PathVariable Long applicationId, 
+                                                 @RequestBody ApplicationReviewRequest request, 
+                                                 @RequestHeader("X-Username") String username) {
+        try {
+            LabApplicationResponse response = labApplicationService.reviewApplication(applicationId, username, request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Withdraw a lab application
+     */
+    @DeleteMapping("/labs/applications/{applicationId}")
+    public ResponseEntity<?> withdrawLabApplication(@PathVariable Long applicationId, @RequestHeader("X-Username") String username) {
+        try {
+            labApplicationService.withdrawApplication(applicationId, username);
+            return ResponseEntity.ok("Application withdrawn successfully");
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get all applications for a lab (for PI)
+     */
+    @GetMapping("/labs/{labId}/applications")
+    public ResponseEntity<?> getLabApplications(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            List<LabApplicationResponse> applications = labApplicationService.getLabApplications(labId, username);
+            return ResponseEntity.ok(applications);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get pending applications for a lab (for PI)
+     */
+    @GetMapping("/labs/{labId}/applications/pending")
+    public ResponseEntity<?> getPendingLabApplications(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            List<LabApplicationResponse> applications = labApplicationService.getPendingLabApplications(labId, username);
+            return ResponseEntity.ok(applications);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get user's lab applications
+     */
+    @GetMapping("/labs/applications/my")
+    public ResponseEntity<?> getMyLabApplications(@RequestHeader("X-Username") String username) {
+        try {
+            List<LabApplicationResponse> applications = labApplicationService.getUserApplications(username);
+            return ResponseEntity.ok(applications);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get user's pending lab applications
+     */
+    @GetMapping("/labs/applications/my/pending")
+    public ResponseEntity<?> getMyPendingLabApplications(@RequestHeader("X-Username") String username) {
+        try {
+            List<LabApplicationResponse> applications = labApplicationService.getUserPendingApplications(username);
+            return ResponseEntity.ok(applications);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Leave a lab
+     */
+    @DeleteMapping("/labs/{labId}/leave")
+    public ResponseEntity<?> leaveLab(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            labApplicationService.leaveLab(labId, username);
+            return ResponseEntity.ok("Successfully left the lab");
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    // ==================== SUPER ADMIN ENDPOINTS ====================
+    
+    /**
+     * Get system overview (Super Admin only)
+     */
+    @GetMapping("/admin/system/overview")
+    public ResponseEntity<?> getSystemOverview(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin required");
+            }
+            
+            List<Map<String, Object>> overview = userService.getSystemOverview();
+            return ResponseEntity.ok(overview);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get all labs with members (Super Admin only)
+     */
+    @GetMapping("/admin/system/labs")
+    public ResponseEntity<?> getAllLabsWithMembers(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin required");
+            }
+            
+            List<Map<String, Object>> labs = userService.getAllLabsWithMembers();
+            return ResponseEntity.ok(labs);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get all teams with members (Super Admin only)
+     */
+    @GetMapping("/admin/system/teams")
+    public ResponseEntity<?> getAllTeamsWithMembers(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin required");
+            }
+            
+            List<Map<String, Object>> teams = userService.getAllTeamsWithMembers();
+            return ResponseEntity.ok(teams);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get all users with full details (Super Admin only)
+     */
+    @GetMapping("/admin/system/users")
+    public ResponseEntity<?> getAllUsersWithFullDetails(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin required");
+            }
+            
+            List<Map<String, Object>> users = userService.getAllUsersWithOrganizations();
+            return ResponseEntity.ok(users);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Check if user is Super Admin
+     */
+    @GetMapping("/admin/system/check-super-admin")
+    public ResponseEntity<?> checkSuperAdmin(@RequestHeader("X-Username") String username) {
+        try {
+            boolean isSuperAdmin = userService.isSuperAdmin(username);
+            Map<String, Object> response = new HashMap<>();
+            response.put("isSuperAdmin", isSuperAdmin);
+            response.put("username", username);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    // ==================== SUPER ADMIN DELETE ENDPOINTS ====================
+    
+    /**
+     * Delete a user (Super Admin only)
+     */
+    @DeleteMapping("/admin/system/users/{userId}")
+    public ResponseEntity<?> deleteUser(@PathVariable Long userId, @RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean deleted = userService.deleteUserById(userId);
+            if (deleted) {
+                return ResponseEntity.ok("User deleted successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deleting user: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Delete a lab (Super Admin only)
+     */
+    @DeleteMapping("/admin/system/labs/{labId}")
+    public ResponseEntity<?> deleteLab(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean deleted = userService.deleteLabById(labId);
+            if (deleted) {
+                return ResponseEntity.ok("Lab deleted successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Lab not found");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deleting lab: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Delete a team (Super Admin only)
+     */
+    @DeleteMapping("/admin/system/teams/{teamId}")
+    public ResponseEntity<?> deleteTeam(@PathVariable Long teamId, @RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean deleted = userService.deleteTeamById(teamId);
+            if (deleted) {
+                return ResponseEntity.ok("Team deleted successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Team not found");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deleting team: " + e.getMessage());
+        }
+    }
+    
+    // ==================== SUPER ADMIN BULK DEACTIVATION ENDPOINTS ====================
+    
+    /**
+     * Deactivate all user accounts (Super Admin only)
+     */
+    @PostMapping("/admin/system/users/deactivate-all")
+    public ResponseEntity<?> deactivateAllUsers(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean success = userService.deactivateAllUsers(username);
+            if (success) {
+                return ResponseEntity.ok("All user accounts deactivated successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("No users were deactivated");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deactivating users: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Deactivate all users except Super Admin accounts (Super Admin only)
+     */
+    @PostMapping("/admin/system/users/deactivate-all-non-super-admin")
+    public ResponseEntity<?> deactivateAllNonSuperAdminUsers(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean success = userService.deactivateAllNonSuperAdminUsers(username);
+            if (success) {
+                return ResponseEntity.ok("All non-Super Admin accounts deactivated successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("No users were deactivated");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deactivating users: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Activate all user accounts (Super Admin only)
+     */
+    @PostMapping("/admin/system/users/activate-all")
+    public ResponseEntity<?> activateAllUsers(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean success = userService.activateAllUsers(username);
+            if (success) {
+                return ResponseEntity.ok("All user accounts activated successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("No users were activated");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error activating users: " + e.getMessage());
+        }
     }
 }

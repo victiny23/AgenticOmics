@@ -31,6 +31,7 @@ import {
 import DataUploadComponent from '../components/DataUpload/DataUploadComponent';
 import DataFileList from '../components/DataUpload/DataFileList';
 import DataUploadDebug from '../components/DataUpload/DataUploadDebug';
+import LabTeamFileList from '../components/DataUpload/LabTeamFileList';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -128,9 +129,15 @@ const DataPage: React.FC = () => {
           />
           <Tab
             icon={<Analytics />}
-            label="Debug"
+            label="Lab/Team Files"
             id="data-tab-2"
             aria-controls="data-tabpanel-2"
+          />
+          <Tab
+            icon={<Analytics />}
+            label="Debug"
+            id="data-tab-3"
+            aria-controls="data-tabpanel-3"
           />
         </Tabs>
       </Paper>
@@ -231,6 +238,21 @@ const DataPage: React.FC = () => {
       </TabPanel>
 
       <TabPanel value={tabValue} index={2}>
+        <Grid container spacing={4}>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent sx={{ p: 4 }}>
+                <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+                  Files by Lab/Team Context
+                </Typography>
+                <LabTeamFileList refreshTrigger={fileListRefreshTrigger} />
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={3}>
         <Grid container spacing={4}>
           <Grid item xs={12}>
             <Card>

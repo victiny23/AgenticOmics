@@ -37,6 +37,15 @@ public class Lab {
     @Column(name = "is_active")
     private Boolean isActive = true;
     
+    @Column(name = "file_count")
+    private Long fileCount = 0L;
+    
+    @Column(name = "total_file_size")
+    private Long totalFileSize = 0L;
+    
+    @Column(name = "last_file_upload")
+    private LocalDateTime lastFileUpload;
+    
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     

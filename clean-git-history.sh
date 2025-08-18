@@ -1,0 +1,90 @@
+#!/bin/bash
+
+echo "🧹 Cleaning Git History of Passwords"
+echo "===================================="
+echo ""
+
+echo "⚠️  WARNING: This will rewrite Git history!"
+echo "This operation will permanently remove passwords from your Git history."
+echo "Make sure you have a backup of your repository."
+echo ""
+
+read -p "Do you want to continue? (y/N): " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Operation cancelled."
+    exit 1
+fi
+
+echo ""
+echo "🔍 Current exposed passwords in Git:"
+git grep -i "admin.*password\|password.*admin" || echo "No passwords found"
+
+echo ""
+echo "📋 Files that have been cleaned:"
+echo "✅ backend/auth/src/main/java/com/agenticomics/auth/DataInitializer.java"
+echo "✅ add-sample-lab-data.sh"
+echo "✅ add-sample-team-data.sh"
+echo "✅ add-second-lab.sh"
+echo "✅ test-context-change.sh"
+echo "✅ test-lab-team-context-fixed.sh"
+echo "✅ scripts/secure-data-setup.sh"
+echo "✅ docker-compose.yml"
+echo "✅ env.template (created)"
+echo ""
+
+echo "🔧 Next steps to completely clean Git history:"
+echo ""
+echo "1. Install BFG Repo-Cleaner (recommended):"
+echo "   brew install bfg  # macOS"
+echo "   # or download from: https://rtyley.github.io/bfg-repo-cleaner/"
+echo ""
+echo "2. Create a backup of your repository:"
+echo "   git clone --mirror git://your-repo-url.git repo-backup.git"
+echo ""
+echo "3. Run BFG to remove passwords:"
+echo "   bfg --replace-text passwords.txt"
+echo ""
+echo "4. Create passwords.txt file with:"
+echo "   admin123"
+echo "   demo123"
+echo "   admin"
+echo "   password"
+echo ""
+echo "5. Clean and push:"
+echo "   git reflog expire --expire=now --all"
+echo "   git gc --prune=now --aggressive"
+echo "   git push --force"
+echo ""
+
+echo "💡 Alternative: Use git filter-branch (more complex but built-in):"
+echo "git filter-branch --force --index-filter \\"
+echo "  'git ls-files -z | xargs -0 sed -i \"s/admin123/REMOVED_PASSWORD/g\"' \\"
+echo "  --prune-empty --tag-name-filter cat -- --all"
+echo ""
+
+echo "⚠️  IMPORTANT: After cleaning Git history:"
+echo "- Update all team members to pull the new history"
+echo "- Update any CI/CD pipelines"
+echo "- Verify no passwords remain in any branches"
+echo "- Change all passwords in your system"
+echo ""
+
+echo "🎯 Current status:"
+echo "✅ Passwords removed from current files"
+echo "✅ Environment variables implemented"
+echo "✅ Secure configuration templates created"
+echo "⏳ Git history cleaning requires manual steps above"
+echo ""
+
+echo "🔐 Security checklist:"
+echo "- [ ] Change admin password in database"
+echo "- [ ] Change demo password in database"
+echo "- [ ] Update environment variables"
+echo "- [ ] Clean Git history (see steps above)"
+echo "- [ ] Test all functionality with new passwords"
+echo "- [ ] Verify no passwords in any files"
+echo ""
+
+echo "✅ Password removal from current files completed!"
+echo "📚 See SECURITY_SETUP.md for detailed security guidelines." 

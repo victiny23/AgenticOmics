@@ -439,6 +439,13 @@ data-management-db.mv.db
 config/user/
 config/personal/
 
+# Secure configuration files
+**/application-secure.properties
+**/application-prod.properties
+**/application-dev.properties
+**/secrets.properties
+**/private.properties
+
 # Logs that might contain user information
 logs/*.log
 logs/user-*.log

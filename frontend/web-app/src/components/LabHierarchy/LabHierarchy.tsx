@@ -48,6 +48,8 @@ import {
   Add,
   Edit,
   Delete,
+  Assignment,
+  ExitToApp,
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -232,11 +234,31 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
     try {
       setLoadingMembers(prev => ({ ...prev, [`lab-${labId}`]: true }));
       const token = localStorage.getItem('jwtToken');
-      const response = await axios.get(`http://localhost:12001/api/auth/admin/labs/${labId}/members`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const currentUsername = localStorage.getItem('username');
+      
+      // Try admin endpoint first (for Lab PIs)
+      let response;
+      try {
+        response = await axios.get(`http://localhost:12001/api/auth/admin/labs/${labId}/members`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Username': currentUsername
+          },
+        });
+      } catch (adminErr: any) {
+        // If admin endpoint fails, try the regular user endpoint
+        if (adminErr.response?.status === 403) {
+          response = await axios.get(`http://localhost:12001/api/auth/labs/${labId}/members`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'X-Username': currentUsername
+            },
+          });
+        } else {
+          throw adminErr;
+        }
+      }
+      
       setLabMembers(prev => ({ ...prev, [labId]: response.data }));
     } catch (err: any) {
       console.error('Failed to fetch lab members:', err);
@@ -250,11 +272,31 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
     try {
       setLoadingMembers(prev => ({ ...prev, [`team-${teamId}`]: true }));
       const token = localStorage.getItem('jwtToken');
-      const response = await axios.get(`http://localhost:12001/api/auth/admin/teams/${teamId}/members`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const currentUsername = localStorage.getItem('username');
+      
+      // Try admin endpoint first (for Lab PIs)
+      let response;
+      try {
+        response = await axios.get(`http://localhost:12001/api/auth/admin/teams/${teamId}/members`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Username': currentUsername
+          },
+        });
+      } catch (adminErr: any) {
+        // If admin endpoint fails, try the regular user endpoint
+        if (adminErr.response?.status === 403) {
+          response = await axios.get(`http://localhost:12001/api/auth/teams/${teamId}/members`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'X-Username': currentUsername
+            },
+          });
+        } else {
+          throw adminErr;
+        }
+      }
+      
       setTeamMembers(prev => ({ ...prev, [teamId]: response.data }));
     } catch (err: any) {
       console.error('Failed to fetch team members:', err);
@@ -338,6 +380,33 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
       default:
         return 'info';
     }
+  };
+
+  // Role-based access control functions
+  const canCreateLab = (userRole: string): boolean => {
+    return userRole === 'Lab PI';
+  };
+
+  const canCreateTeam = (userRole: string): boolean => {
+    return ['Lab PI', 'PhD Student', 'Master Student', 'Team Leader', 'Senior Member'].includes(userRole);
+  };
+
+  const getUserHighestRole = (): string => {
+    if (!profile) return '';
+    
+    // Check lab memberships for highest role
+    const labRoles = profile.labMemberships?.map(m => m.roleInLab) || [];
+    const teamRoles = profile.teamMemberships?.map(m => m.roleInTeam) || [];
+    
+    const allRoles = [...labRoles, ...teamRoles, profile.role];
+    
+    // Priority order: Lab PI > Team Leader > PhD Student > Master Student > others
+    if (allRoles.includes('Lab PI')) return 'Lab PI';
+    if (allRoles.includes('Team Leader')) return 'Team Leader';
+    if (allRoles.includes('PhD Student')) return 'PhD Student';
+    if (allRoles.includes('Master Student')) return 'Master Student';
+    
+    return profile.role || '';
   };
 
   if (loading) {
@@ -441,16 +510,75 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
               </Tabs>
             </Box>
 
-            {/* Create Organization Button */}
-            <Box sx={{ mb: 2 }}>
-              <Button
-                variant="outlined"
-                startIcon={<Add />}
-                onClick={() => setCreateDialogOpen(true)}
-                size="small"
-              >
-                Create New Organization
-              </Button>
+            {/* User Role and Permissions Display */}
+            <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.300' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                Your Role & Permissions
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Chip 
+                  label={`Role: ${getUserHighestRole()}`}
+                  color="primary"
+                  size="small"
+                />
+                <Chip 
+                  label={`Create Lab: ${canCreateLab(getUserHighestRole()) ? '✅' : '❌'}`}
+                  color={canCreateLab(getUserHighestRole()) ? 'success' : 'default'}
+                  size="small"
+                />
+                <Chip 
+                  label={`Create Team: ${canCreateTeam(getUserHighestRole()) ? '✅' : '❌'}`}
+                  color={canCreateTeam(getUserHighestRole()) ? 'success' : 'default'}
+                  size="small"
+                />
+              </Box>
+            </Box>
+
+            {/* Create Organization Buttons - Role-based Access Control */}
+            <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {(() => {
+                const userRole = getUserHighestRole();
+                const canCreateLabPermission = canCreateLab(userRole);
+                const canCreateTeamPermission = canCreateTeam(userRole);
+                
+                return (
+                  <>
+                    {canCreateLabPermission && (
+                      <Button
+                        variant="outlined"
+                        startIcon={<Add />}
+                        onClick={() => {
+                          setCreateType('lab');
+                          setCreateDialogOpen(true);
+                        }}
+                        size="small"
+                        color="primary"
+                      >
+                        Create New Lab
+                      </Button>
+                    )}
+                    {canCreateTeamPermission && (
+                      <Button
+                        variant="outlined"
+                        startIcon={<Add />}
+                        onClick={() => {
+                          setCreateType('team');
+                          setCreateDialogOpen(true);
+                        }}
+                        size="small"
+                        color="secondary"
+                      >
+                        Create New Team
+                      </Button>
+                    )}
+                    {!canCreateLabPermission && !canCreateTeamPermission && (
+                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                        You don't have permission to create labs or teams.
+                      </Typography>
+                    )}
+                  </>
+                );
+              })()}
             </Box>
 
             {/* Labs Tab */}
@@ -690,6 +818,48 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
             </TabPanel>
           </>
         )}
+
+        {/* Application and Management Actions */}
+        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Organization Management
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <Button
+                variant="outlined"
+                startIcon={<Assignment />}
+                onClick={() => {
+                  // This will open the application form
+                  window.open('/admin/users', '_blank');
+                }}
+                fullWidth
+                sx={{ mb: 1 }}
+              >
+                Apply to Join Lab
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<Assignment />}
+                onClick={() => {
+                  // This will open the applications panel
+                  window.open('/admin/users', '_blank');
+                }}
+                fullWidth
+              >
+                My Applications
+              </Button>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                • Apply to join new labs or teams<br/>
+                • View and manage your applications<br/>
+                • Leave current organizations<br/>
+                • Manage your memberships
+              </Typography>
+            </Grid>
+          </Grid>
+        </Box>
 
         {/* Summary */}
         <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>

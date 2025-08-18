@@ -12,7 +12,14 @@ export default defineConfig({
       'work-1-bwktzeajbmgslino.prod-runtime.all-hands.dev',
       'localhost',
       '0.0.0.0'
-    ]
+    ],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:12001',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   define: {
     'process.env.VITE_API_URL': JSON.stringify('https://work-2-bwktzeajbmgslino.prod-runtime.all-hands.dev')

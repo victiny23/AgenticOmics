@@ -2,6 +2,7 @@ package com.agenticomics.datamanagement.controller;
 
 import com.agenticomics.datamanagement.dto.DataFileResponse;
 import com.agenticomics.datamanagement.dto.DataFileUpdateRequest;
+import com.agenticomics.datamanagement.dto.LabTeamFileStatistics;
 import com.agenticomics.datamanagement.service.DataFileService;
 import com.agenticomics.datamanagement.exception.DataFileException;
 import lombok.RequiredArgsConstructor;
@@ -32,12 +33,20 @@ public class DataFileController {
             @RequestParam(value = "tags", required = false) String tags,
             @RequestParam(value = "isPublic", required = false, defaultValue = "false") Boolean isPublic,
             @RequestParam(value = "metadata", required = false) String metadata,
+            @RequestParam(value = "uploadContext", required = false) String uploadContext,
+            @RequestParam(value = "labId", required = false) Long labId,
+            @RequestParam(value = "labName", required = false) String labName,
+            @RequestParam(value = "teamId", required = false) Long teamId,
+            @RequestParam(value = "teamName", required = false) String teamName,
             @RequestHeader("X-Username") String username) {
         
         try {
             log.info("File upload request received from user: {}, filename: {}", username, file.getOriginalFilename());
             
-            DataFileResponse response = dataFileService.uploadFile(file, username, description, tags, isPublic, metadata);
+            DataFileResponse response = dataFileService.uploadFile(
+                file, username, description, tags, isPublic, metadata,
+                uploadContext, labId, labName, teamId, teamName
+            );
             
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
             
@@ -159,6 +168,82 @@ public class DataFileController {
         } catch (Exception e) {
             log.error("Error getting file statistics for user: {}, error: {}", username, e.getMessage());
             throw new DataFileException("Failed to retrieve file statistics: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get files by lab context
+     */
+    @GetMapping("/files/lab/{labId}")
+    public ResponseEntity<List<DataFileResponse>> getFilesByLab(
+            @PathVariable Long labId,
+            @RequestHeader("X-Username") String username) {
+        try {
+            log.info("Getting files for lab ID: {} by user: {}", labId, username);
+            
+            List<DataFileResponse> files = dataFileService.getFilesByLab(labId, username);
+            
+            return ResponseEntity.ok(files);
+            
+        } catch (Exception e) {
+            log.error("Error getting files for lab ID: {} by user: {}, error: {}", labId, username, e.getMessage());
+            throw new DataFileException("Failed to retrieve lab files: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get files by team context
+     */
+    @GetMapping("/files/team/{teamId}")
+    public ResponseEntity<List<DataFileResponse>> getFilesByTeam(
+            @PathVariable Long teamId,
+            @RequestHeader("X-Username") String username) {
+        try {
+            log.info("Getting files for team ID: {} by user: {}", teamId, username);
+            
+            List<DataFileResponse> files = dataFileService.getFilesByTeam(teamId, username);
+            
+            return ResponseEntity.ok(files);
+            
+        } catch (Exception e) {
+            log.error("Error getting files for team ID: {} by user: {}, error: {}", teamId, username, e.getMessage());
+            throw new DataFileException("Failed to retrieve team files: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get files uploaded by subordinates (for supervisors)
+     */
+    @GetMapping("/files/subordinates")
+    public ResponseEntity<List<DataFileResponse>> getSubordinateFiles(@RequestHeader("X-Username") String username) {
+        try {
+            log.info("Getting subordinate files for supervisor: {}", username);
+            
+            List<DataFileResponse> files = dataFileService.getSubordinateFiles(username);
+            
+            return ResponseEntity.ok(files);
+            
+        } catch (Exception e) {
+            log.error("Error getting subordinate files for supervisor: {}, error: {}", username, e.getMessage());
+            throw new DataFileException("Failed to retrieve subordinate files: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get file statistics by lab/team context
+     */
+    @GetMapping("/files/lab-team-statistics")
+    public ResponseEntity<LabTeamFileStatistics> getLabTeamFileStatistics(@RequestHeader("X-Username") String username) {
+        try {
+            log.info("Getting lab/team file statistics for user: {}", username);
+            
+            LabTeamFileStatistics statistics = dataFileService.getLabTeamFileStatistics(username);
+            
+            return ResponseEntity.ok(statistics);
+            
+        } catch (Exception e) {
+            log.error("Error getting lab/team file statistics for user: {}, error: {}", username, e.getMessage());
+            throw new DataFileException("Failed to retrieve lab/team file statistics: " + e.getMessage());
         }
     }
     

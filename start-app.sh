@@ -17,6 +17,12 @@ if [ -z "$JAVA_HOME" ]; then
 fi
 
 # Check if we're in a runtime environment with external URLs
+# Set default ports for all modes
+export FRONTEND_PORT=12000
+export API_GATEWAY_PORT=12001
+export AUTH_PORT=8081
+export DATA_PORT=8082
+
 if [[ -n "$RUNTIME_ENV" || "$1" == "--external" ]]; then
     echo "🌍 Starting AgenticOmics Platform with External Access..."
     echo "========================================================"
@@ -24,9 +30,6 @@ if [[ -n "$RUNTIME_ENV" || "$1" == "--external" ]]; then
     echo "🌐 External URLs will be enabled"
     export EXTERNAL_MODE=true
     export SERVER_ADDRESS=0.0.0.0
-    export FRONTEND_PORT=12000
-    export API_GATEWAY_PORT=12001
-    export AUTH_PORT=8081
     export VITE_HOST=0.0.0.0
     export VITE_PORT=12000
     export VITE_API_TARGET=https://work-2-bwktzeajbmgslino.prod-runtime.all-hands.dev
@@ -100,9 +103,10 @@ pkill -f "npm start" 2>/dev/null || true
 sleep 2
 
 # Check required ports
-check_port 8080
-check_port 8081
-check_port 3000
+check_port $API_GATEWAY_PORT
+check_port $AUTH_PORT
+check_port $DATA_PORT
+check_port $FRONTEND_PORT
 
 # Step 1: Build backend (if needed)
 echo ""
@@ -126,9 +130,11 @@ if [ "$EXTERNAL_MODE" = true ]; then
     GATEWAY_PID=$!
     cd ../..
 else
-    echo "🌐 Starting API Gateway (port 8080)..."
-    ./run-services.sh gateway > logs/gateway.log 2>&1 &
+    echo "🌐 Starting API Gateway (port $API_GATEWAY_PORT)..."
+    cd backend/api-gateway
+    nohup mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=$API_GATEWAY_PORT" > ../../logs/gateway.log 2>&1 &
     GATEWAY_PID=$!
+    cd ../..
 fi
 
 # Step 3: Start Authentication Service
@@ -139,27 +145,36 @@ if [ "$EXTERNAL_MODE" = true ]; then
     AUTH_PID=$!
     cd ../..
 else
-    echo "🔐 Starting Authentication Service (port 8081)..."
-    ./run-services.sh auth > logs/auth.log 2>&1 &
+    echo "🔐 Starting Authentication Service (port $AUTH_PORT)..."
+    cd backend/auth
+    nohup mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=$AUTH_PORT" > ../../logs/auth.log 2>&1 &
     AUTH_PID=$!
+    cd ../..
+fi
+
+# Step 4: Start Data Management Service
+if [ "$EXTERNAL_MODE" = true ]; then
+    echo "📊 Starting Data Management Service (port $DATA_PORT) with external access..."
+    cd backend/data-management
+    nohup mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=$DATA_PORT --server.address=$SERVER_ADDRESS" > ../../logs/data-management.log 2>&1 &
+    DATA_PID=$!
+    cd ../..
+else
+    echo "📊 Starting Data Management Service (port $DATA_PORT)..."
+    cd backend/data-management
+    nohup mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=$DATA_PORT" > ../../logs/data-management.log 2>&1 &
+    DATA_PID=$!
+    cd ../..
 fi
 
 # Wait for backend services
-if [ "$EXTERNAL_MODE" = true ]; then
-    wait_for_service $API_GATEWAY_PORT "API Gateway"
-    wait_for_service $AUTH_PORT "Authentication Service"
-else
-    wait_for_service 8080 "API Gateway"
-    wait_for_service 8081 "Authentication Service"
-fi
+wait_for_service $API_GATEWAY_PORT "API Gateway"
+wait_for_service $AUTH_PORT "Authentication Service"
+wait_for_service $DATA_PORT "Data Management Service"
 
 # Step 4: Start Frontend
 echo ""
-if [ "$EXTERNAL_MODE" = true ]; then
-    echo "🎨 Starting Frontend Application with External Access (port $FRONTEND_PORT)..."
-else
-    echo "🎨 Starting Frontend Application (port 3000)..."
-fi
+echo "🎨 Starting Frontend Application (port $FRONTEND_PORT)..."
 
 cd frontend/web-app
 
@@ -198,22 +213,19 @@ EOF
     nohup npm run dev > ../../logs/frontend.log 2>&1 &
     FRONTEND_PID=$!
     cd ../..
-    
-    # Wait for frontend
-    wait_for_service $FRONTEND_PORT "Frontend Application"
 else
     echo "   Starting React development server..."
-    npm run dev > ../../logs/frontend.log 2>&1 &
+    nohup npm run dev -- --port $FRONTEND_PORT > ../../logs/frontend.log 2>&1 &
     FRONTEND_PID=$!
     cd ../..
-    
-    # Wait for frontend
-    wait_for_service 3000 "Frontend Application"
 fi
+
+# Wait for frontend
+wait_for_service $FRONTEND_PORT "Frontend Application"
 
 # Create PID file for cleanup
 mkdir -p logs
-echo "$GATEWAY_PID $AUTH_PID $FRONTEND_PID" > logs/app-pids.txt
+echo "$GATEWAY_PID $AUTH_PID $DATA_PID $FRONTEND_PID" > logs/app-pids.txt
 
 # Add at the top, after set -e
 get_local_ip() {
@@ -279,20 +291,21 @@ else
     echo "=============================================="
     echo ""
     echo "📱 Access the application:"
-    echo "   🏠 Local Access:
-      • Main Application (Frontend): http://localhost:$FRONTEND_PORT
-      • H2 Database Console:        http://localhost:$AUTH_PORT/h2-console
-   🔧 Backend Services (for developers):
-      • API Gateway:      http://localhost:$API_GATEWAY_PORT
-      • Auth Service:     http://localhost:$AUTH_PORT
-   🌐 Network Access (from other devices on same network):
-      • Main Application: http://$LOCAL_IP:$FRONTEND_PORT
-   🌍 External Access (if port forwarding or tunnel is configured):
-      • Main Application: http://$PUBLIC_IP:$FRONTEND_PORT
-🔗 Share these URLs with others:
-   📱 Mobile/Tablet on same network: http://$LOCAL_IP:$FRONTEND_PORT
-   💻 Other Laptops on same network: http://$LOCAL_IP:$FRONTEND_PORT
-   🌍 External devices (if port forwarding/tunnel configured): http://$PUBLIC_IP:$FRONTEND_PORT"
+    echo "   🏠 Local Access:"
+    echo "      • Main Application (Frontend): http://localhost:$FRONTEND_PORT"
+    echo "      • H2 Database Console:        http://localhost:$AUTH_PORT/h2-console"
+    echo "   🔧 Backend Services (for developers):"
+    echo "      • API Gateway:      http://localhost:$API_GATEWAY_PORT"
+    echo "      • Auth Service:     http://localhost:$AUTH_PORT"
+    echo "      • Data Management:  http://localhost:$DATA_PORT"
+    echo "   🌐 Network Access (from other devices on same network):"
+    echo "      • Main Application: http://$LOCAL_IP:$FRONTEND_PORT"
+    echo "   🌍 External Access (if port forwarding or tunnel is configured):"
+    echo "      • Main Application: http://$PUBLIC_IP:$FRONTEND_PORT"
+    echo "🔗 Share these URLs with others:"
+    echo "   📱 Mobile/Tablet on same network: http://$LOCAL_IP:$FRONTEND_PORT"
+    echo "   💻 Other Laptops on same network: http://$LOCAL_IP:$FRONTEND_PORT"
+    echo "   🌍 External devices (if port forwarding/tunnel configured): http://$PUBLIC_IP:$FRONTEND_PORT"
     echo ""
     echo "🛑 To stop all services:"
     echo "   ./stop-app.sh"

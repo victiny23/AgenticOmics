@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Debug</title>
+</head>
+<body>
+    <h1>Authentication Debug</h1>
+    <div id="debug-info"></div>
+    
+    <script>
+        function checkAuth() {
+            const token = localStorage.getItem('jwtToken');
+            const username = localStorage.getItem('username');
+            const isActive = localStorage.getItem('isActive');
+            
+            const debugInfo = document.getElementById('debug-info');
+            debugInfo.innerHTML = `
+                <h3>Local Storage:</h3>
+                <p><strong>JWT Token:</strong> ${token ? token.substring(0, 50) + '...' : 'NOT FOUND'}</p>
+                <p><strong>Username:</strong> ${username || 'NOT FOUND'}</p>
+                <p><strong>Is Active:</strong> ${isActive || 'NOT FOUND'}</p>
+                
+                <h3>Test API Call:</h3>
+                <button onclick="testAPI()">Test Super Admin API</button>
+                <div id="api-result"></div>
+            `;
+        }
+        
+        async function testAPI() {
+            const token = localStorage.getItem('jwtToken');
+            const username = localStorage.getItem('username');
+            const resultDiv = document.getElementById('api-result');
+            
+            if (!token || !username) {
+                resultDiv.innerHTML = '<p style="color: red;">❌ Missing token or username</p>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/auth/admin/system/check-super-admin', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'X-Username': username,
+                    },
+                });
+                
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <p><strong>Response:</strong> ${JSON.stringify(data, null, 2)}</p>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+            }
+        }
+        
+        // Check auth on page load
+        checkAuth();
+    </script>
+</body>
+</html> 
