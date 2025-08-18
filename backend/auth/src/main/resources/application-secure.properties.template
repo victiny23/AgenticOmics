@@ -1,0 +1,29 @@
+# Secure Configuration Template
+# Copy this file to application-secure.properties and customize with your own values
+# This file should NEVER be committed to version control
+
+# Admin user configuration
+admin.username=your-admin-username
+admin.password.hash=your-bcrypt-hashed-password
+admin.email=your-admin-email@domain.com
+
+# Database configuration (if using external database)
+spring.datasource.url=jdbc:h2:file:./auth-db
+spring.datasource.username=sa
+spring.datasource.password=your-secure-password
+
+# JWT configuration
+jwt.secret=your-super-secret-jwt-key-here
+jwt.expiration=86400000
+
+# File upload configuration
+file.upload.path=./uploads
+file.max-size=10485760
+
+# Email configuration (if needed)
+spring.mail.host=smtp.your-provider.com
+spring.mail.port=587
+spring.mail.username=your-email@domain.com
+spring.mail.password=your-email-password
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true 

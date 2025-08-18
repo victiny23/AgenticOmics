@@ -82,12 +82,6 @@ const navigationItems: NavigationItem[] = [
     path: '/result',
     description: 'View and export analysis results',
   },
-  {
-    text: 'User Management',
-    icon: <AdminPanelSettings />,
-    path: '/admin/users',
-    description: 'Manage memberships and applications',
-  },
 ]
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
@@ -220,7 +214,52 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           )
         })}
         
-        {/* User Management for PI users */}
+        {/* System Administration for Super Admin */}
+        {role === 'Super Admin' && (
+            <ListItem disablePadding sx={{ mb: 1 }}>
+              <ListItemButton
+                onClick={() => handleNavigation('/admin/system')}
+                sx={{
+                  borderRadius: 2,
+                  mx: 1,
+                  backgroundColor: location.pathname === '/admin/system' ? 'rgba(25, 118, 210, 0.2)' : 'transparent',
+                  '&:hover': {
+                    backgroundColor: location.pathname === '/admin/system' 
+                      ? 'rgba(25, 118, 210, 0.3)' 
+                      : 'rgba(255, 255, 255, 0.1)',
+                  },
+                  border: location.pathname === '/admin/system' ? '1px solid rgba(25, 118, 210, 0.5)' : '1px solid transparent',
+                }}
+              >
+                <ListItemIcon
+                  sx={{
+                    color: location.pathname === '/admin/system' ? '#42a5f5' : '#b0b0b0',
+                    minWidth: 40,
+                  }}
+                >
+                  <AdminPanelSettings />
+                </ListItemIcon>
+                <ListItemText
+                  primary="System Administration"
+                  secondary="Manage all users, labs, and teams"
+                  primaryTypographyProps={{
+                    sx: {
+                      color: location.pathname === '/admin/system' ? 'white' : '#e0e0e0',
+                      fontWeight: location.pathname === '/admin/system' ? 600 : 400,
+                    },
+                  }}
+                  secondaryTypographyProps={{
+                    sx: {
+                      color: '#888',
+                      fontSize: '0.75rem',
+                    },
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+        )}
+        
+        {/* User Management for PI users (not Super Admin) */}
         {role === 'Lab PI' && (
           <ListItem disablePadding sx={{ mb: 1 }}>
             <ListItemButton

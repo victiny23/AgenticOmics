@@ -30,4 +30,9 @@ public interface UserTeamMembershipRepository extends JpaRepository<UserTeamMemb
     
     @Query("SELECT utm FROM UserTeamMembership utm WHERE utm.user.id = :userId AND utm.isPrimaryTeam = true AND utm.isActive = true")
     Optional<UserTeamMembership> findPrimaryTeamMembershipByUserId(@Param("userId") Long userId);
+    
+    // Delete methods for Super Admin
+    void deleteByUserId(Long userId);
+    
+    void deleteByTeamId(Long teamId);
 } 

@@ -34,4 +34,7 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
     
     @Query("SELECT t.teamId FROM Team t WHERE t.teamId LIKE 'TEAM%' ORDER BY CAST(SUBSTRING(t.teamId, 5) AS INTEGER) DESC")
     List<String> findTeamIdsOrderedByNumber();
+    
+    // Delete methods for Super Admin
+    void deleteByLabId(Long labId);
 } 

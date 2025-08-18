@@ -49,27 +49,25 @@ find backend/auth/data/uploads/profile-photos -type f ! -name '.gitkeep' -delete
 find backend/data-management/data/uploads/omics-data -type f ! -name '.gitkeep' -delete
 find data/uploads -type f ! -name '.gitkeep' -delete
 
-# Create sample data for development
+# Create sample data for development (without passwords)
 echo "📋 Creating sample data for development..."
 cat > backend/auth/data/sample-users.json << 'EOF'
 {
   "sample_users": [
     {
       "username": "admin",
-      "password": "admin123",
       "email": "admin@agenticomics.com",
-      "role": "Lab PI",
-      "description": "Sample administrator account"
+      "role": "Super Admin",
+      "description": "Sample administrator account - use environment variables for password"
     },
     {
       "username": "demo",
-      "password": "demo123", 
       "email": "demo@agenticomics.com",
       "role": "PhD student",
-      "description": "Sample demo account"
+      "description": "Sample demo account - use environment variables for password"
     }
   ],
-  "note": "These are sample accounts for development only. Real user data should never be committed to the repository."
+  "note": "These are sample accounts for development only. Passwords should be set via environment variables (ADMIN_PASSWORD, DEMO_PASSWORD). Real user data should never be committed to the repository."
 }
 EOF
 

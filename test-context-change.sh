@@ -24,7 +24,9 @@ fi
 
 # Test 3: Admin's lab memberships
 echo "3. Testing admin's lab memberships..."
-ADMIN_TOKEN=$(curl -s -X POST "http://localhost:8081/login" -H "Content-Type: application/json" -d '{"username":"admin","password":"admin123"}' | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+ADMIN_TOKEN=$(curl -s -X POST "http://localhost:8081/login" -H "Content-Type: application/json" -d "{\"username\":\"$ADMIN_USERNAME\",\"password\":\"$ADMIN_PASSWORD\"}" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 ADMIN_PROFILE=$(curl -s "http://localhost:12001/api/auth/profile" -H "Authorization: Bearer $ADMIN_TOKEN" -H "X-Username: admin")
 
 if echo "$ADMIN_PROFILE" | grep -q "labMemberships"; then

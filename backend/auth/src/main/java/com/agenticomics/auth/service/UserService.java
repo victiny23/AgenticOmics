@@ -13,6 +13,7 @@ import com.agenticomics.auth.repository.TeamRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -161,6 +162,7 @@ public class UserService {
         return userRepository.findById(id);
     }
     
+    @Transactional
     public boolean deleteByUsername(String username) {
         Optional<User> user = userRepository.findByUsername(username);
         if (user.isPresent()) {
@@ -407,6 +409,50 @@ public class UserService {
             throw new RuntimeException("You can only activate users who are members of your labs");
         }
         
+        user.setIsActive(true);
+        userRepository.save(user);
+        return true;
+    }
+
+    /**
+     * Super Admin method to deactivate any user account
+     */
+    @Transactional
+    public boolean deactivateUserBySuperAdmin(Long userId, String adminUsername) {
+        if (!isSuperAdmin(adminUsername)) {
+            throw new RuntimeException("Only Super Admin users can deactivate any user account");
+        }
+        
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new RuntimeException("User not found");
+        }
+        
+        User user = userOpt.get();
+        if ("Super Admin".equals(user.getRole()) && user.getUsername().equals(adminUsername)) {
+            throw new RuntimeException("Super Admin cannot deactivate their own account");
+        }
+        
+        user.setIsActive(false);
+        userRepository.save(user);
+        return true;
+    }
+
+    /**
+     * Super Admin method to activate any user account
+     */
+    @Transactional
+    public boolean activateUserBySuperAdmin(Long userId, String adminUsername) {
+        if (!isSuperAdmin(adminUsername)) {
+            throw new RuntimeException("Only Super Admin users can activate any user account");
+        }
+        
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new RuntimeException("User not found");
+        }
+        
+        User user = userOpt.get();
         user.setIsActive(true);
         userRepository.save(user);
         return true;
@@ -715,5 +761,321 @@ public class UserService {
         }
         
         return usersWithOrganizations;
+    }
+    
+    // Super Admin Methods
+    public boolean isSuperAdmin(String username) {
+        Optional<User> user = userRepository.findByUsername(username);
+        return user.isPresent() && "Super Admin".equals(user.get().getRole());
+    }
+    
+    /**
+     * Deactivate all user accounts (Super Admin only)
+     */
+    @Transactional
+    public boolean deactivateAllUsers(String adminUsername) {
+        // Check if the admin is a Super Admin
+        if (!isSuperAdmin(adminUsername)) {
+            throw new RuntimeException("Only Super Admin users can deactivate all accounts");
+        }
+        
+        // Get all active users except the admin
+        List<User> activeUsers = userRepository.findAllActiveUsers();
+        int deactivatedCount = 0;
+        
+        for (User user : activeUsers) {
+            // Don't deactivate the admin themselves
+            if (!user.getUsername().equals(adminUsername)) {
+                user.setIsActive(false);
+                userRepository.save(user);
+                deactivatedCount++;
+            }
+        }
+        
+        return deactivatedCount > 0;
+    }
+    
+    /**
+     * Deactivate all users except Super Admin accounts (Super Admin only)
+     */
+    @Transactional
+    public boolean deactivateAllNonSuperAdminUsers(String adminUsername) {
+        // Check if the admin is a Super Admin
+        if (!isSuperAdmin(adminUsername)) {
+            throw new RuntimeException("Only Super Admin users can deactivate all accounts");
+        }
+        
+        // Get all active users
+        List<User> activeUsers = userRepository.findAllActiveUsers();
+        int deactivatedCount = 0;
+        
+        for (User user : activeUsers) {
+            // Don't deactivate Super Admin accounts
+            if (!"Super Admin".equals(user.getRole())) {
+                user.setIsActive(false);
+                userRepository.save(user);
+                deactivatedCount++;
+            }
+        }
+        
+        return deactivatedCount > 0;
+    }
+    
+    /**
+     * Activate all user accounts (Super Admin only)
+     */
+    @Transactional
+    public boolean activateAllUsers(String adminUsername) {
+        // Check if the admin is a Super Admin
+        if (!isSuperAdmin(adminUsername)) {
+            throw new RuntimeException("Only Super Admin users can activate all accounts");
+        }
+        
+        // Get all inactive users
+        List<User> inactiveUsers = userRepository.findAllDeactivatedUsers();
+        int activatedCount = 0;
+        
+        for (User user : inactiveUsers) {
+            user.setIsActive(true);
+            userRepository.save(user);
+            activatedCount++;
+        }
+        
+        return activatedCount > 0;
+    }
+    
+    public List<Map<String, Object>> getSystemOverview() {
+        List<Map<String, Object>> overview = new ArrayList<>();
+        
+        // Get all users count
+        long totalUsers = userRepository.count();
+        long activeUsers = userRepository.countActiveUsers();
+        
+        // Get all labs count
+        long totalLabs = labRepository.count();
+        
+        // Get all teams count
+        long totalTeams = teamRepository.count();
+        
+        // Get users by role
+        Map<String, Object> userStats = new HashMap<>();
+        userStats.put("totalUsers", totalUsers);
+        userStats.put("activeUsers", activeUsers);
+        userStats.put("inactiveUsers", totalUsers - activeUsers);
+        
+        // Get role distribution
+        List<User> allUsers = userRepository.findAll();
+        Map<String, Long> roleDistribution = allUsers.stream()
+            .collect(Collectors.groupingBy(User::getRole, Collectors.counting()));
+        userStats.put("roleDistribution", roleDistribution);
+        
+        overview.add(userStats);
+        
+        // Get lab statistics
+        Map<String, Object> labStats = new HashMap<>();
+        labStats.put("totalLabs", totalLabs);
+        List<Lab> allLabs = labRepository.findAll();
+        List<Map<String, Object>> labDetails = new ArrayList<>();
+        for (Lab lab : allLabs) {
+            Map<String, Object> labInfo = new HashMap<>();
+            labInfo.put("id", lab.getId());
+            labInfo.put("labId", lab.getLabId());
+            labInfo.put("labName", lab.getLabName());
+            labInfo.put("institution", lab.getInstitution());
+            labInfo.put("department", lab.getDepartment());
+            
+            // Count members in this lab
+            List<UserLabMembership> labMemberships = userLabMembershipRepository.findByLabIdAndIsActiveTrue(lab.getId());
+            long memberCount = labMemberships.size();
+            labInfo.put("memberCount", memberCount);
+            
+            labDetails.add(labInfo);
+        }
+        labStats.put("labDetails", labDetails);
+        overview.add(labStats);
+        
+        // Get team statistics
+        Map<String, Object> teamStats = new HashMap<>();
+        teamStats.put("totalTeams", totalTeams);
+        List<Team> allTeams = teamRepository.findAll();
+        List<Map<String, Object>> teamDetails = new ArrayList<>();
+        for (Team team : allTeams) {
+            Map<String, Object> teamInfo = new HashMap<>();
+            teamInfo.put("id", team.getId());
+            teamInfo.put("teamId", team.getTeamId());
+            teamInfo.put("teamName", team.getTeamName());
+            teamInfo.put("description", team.getTeamDescription());
+            
+            // Count members in this team
+            List<UserTeamMembership> teamMemberships = userTeamMembershipRepository.findByTeamIdAndIsActiveTrue(team.getId());
+            long memberCount = teamMemberships.size();
+            teamInfo.put("memberCount", memberCount);
+            
+            teamDetails.add(teamInfo);
+        }
+        teamStats.put("teamDetails", teamDetails);
+        overview.add(teamStats);
+        
+        return overview;
+    }
+    
+    public List<Map<String, Object>> getAllLabsWithMembers() {
+        List<Lab> allLabs = labRepository.findAll();
+        List<Map<String, Object>> labsWithMembers = new ArrayList<>();
+        
+        for (Lab lab : allLabs) {
+            Map<String, Object> labInfo = new HashMap<>();
+            labInfo.put("id", lab.getId());
+            labInfo.put("labId", lab.getLabId());
+            labInfo.put("labName", lab.getLabName());
+            labInfo.put("institution", lab.getInstitution());
+            labInfo.put("department", lab.getDepartment());
+            labInfo.put("description", lab.getLabDescription());
+            labInfo.put("createdAt", lab.getCreatedAt());
+            
+            // Get all members in this lab
+            List<UserLabMembership> memberships = userLabMembershipRepository.findByLabIdAndIsActiveTrue(lab.getId());
+            List<Map<String, Object>> members = new ArrayList<>();
+            for (UserLabMembership membership : memberships) {
+                Map<String, Object> member = new HashMap<>();
+                member.put("userId", membership.getUser().getId());
+                member.put("username", membership.getUser().getUsername());
+                member.put("email", membership.getUser().getEmail());
+                member.put("role", membership.getUser().getRole());
+                member.put("roleInLab", membership.getRoleInLab());
+                member.put("memberId", membership.getMemberId());
+                member.put("isPrimaryLab", membership.getIsPrimaryLab());
+                member.put("joinedAt", membership.getJoinedAt());
+                members.add(member);
+            }
+            labInfo.put("members", members);
+            labInfo.put("memberCount", members.size());
+            
+            labsWithMembers.add(labInfo);
+        }
+        
+        return labsWithMembers;
+    }
+    
+    public List<Map<String, Object>> getAllTeamsWithMembers() {
+        List<Team> allTeams = teamRepository.findAll();
+        List<Map<String, Object>> teamsWithMembers = new ArrayList<>();
+        
+        for (Team team : allTeams) {
+            Map<String, Object> teamInfo = new HashMap<>();
+            teamInfo.put("id", team.getId());
+            teamInfo.put("teamId", team.getTeamId());
+            teamInfo.put("teamName", team.getTeamName());
+            teamInfo.put("description", team.getTeamDescription());
+            teamInfo.put("createdAt", team.getCreatedAt());
+            
+            // Get all members in this team
+            List<UserTeamMembership> memberships = userTeamMembershipRepository.findByTeamIdAndIsActiveTrue(team.getId());
+            List<Map<String, Object>> members = new ArrayList<>();
+            for (UserTeamMembership membership : memberships) {
+                Map<String, Object> member = new HashMap<>();
+                member.put("userId", membership.getUser().getId());
+                member.put("username", membership.getUser().getUsername());
+                member.put("email", membership.getUser().getEmail());
+                member.put("role", membership.getUser().getRole());
+                member.put("roleInTeam", membership.getRoleInTeam());
+                member.put("memberId", membership.getMemberId());
+                member.put("isPrimaryTeam", membership.getIsPrimaryTeam());
+                member.put("joinedAt", membership.getJoinedAt());
+                members.add(member);
+            }
+            teamInfo.put("members", members);
+            teamInfo.put("memberCount", members.size());
+            
+            teamsWithMembers.add(teamInfo);
+        }
+        
+        return teamsWithMembers;
+    }
+    
+    // ==================== SUPER ADMIN DELETE METHODS ====================
+    
+    /**
+     * Delete a user by ID (Super Admin only)
+     */
+    @Transactional
+    public boolean deleteUserById(Long userId) {
+        try {
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                
+                // Prevent deletion of Super Admin users
+                if ("Super Admin".equals(user.getRole())) {
+                    throw new RuntimeException("Cannot delete Super Admin users");
+                }
+                
+                // Delete related memberships first
+                userLabMembershipRepository.deleteByUserId(userId);
+                userTeamMembershipRepository.deleteByUserId(userId);
+                
+                // Delete the user
+                userRepository.deleteById(userId);
+                return true;
+            }
+            return false;
+        } catch (Exception e) {
+            throw new RuntimeException("Error deleting user: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Delete a lab by ID (Super Admin only)
+     */
+    @Transactional
+    public boolean deleteLabById(Long labId) {
+        try {
+            Optional<Lab> labOpt = labRepository.findById(labId);
+            if (labOpt.isPresent()) {
+                Lab lab = labOpt.get();
+                
+                // Delete all team memberships in this lab's teams
+                List<Team> teams = teamRepository.findByLabId(labId);
+                for (Team team : teams) {
+                    userTeamMembershipRepository.deleteByTeamId(team.getId());
+                }
+                
+                // Delete all teams in this lab
+                teamRepository.deleteByLabId(labId);
+                
+                // Delete all lab memberships
+                userLabMembershipRepository.deleteByLabId(labId);
+                
+                // Delete the lab
+                labRepository.deleteById(labId);
+                return true;
+            }
+            return false;
+        } catch (Exception e) {
+            throw new RuntimeException("Error deleting lab: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Delete a team by ID (Super Admin only)
+     */
+    @Transactional
+    public boolean deleteTeamById(Long teamId) {
+        try {
+            Optional<Team> teamOpt = teamRepository.findById(teamId);
+            if (teamOpt.isPresent()) {
+                Team team = teamOpt.get();
+                
+                // Delete all team memberships
+                userTeamMembershipRepository.deleteByTeamId(teamId);
+                
+                // Delete the team
+                teamRepository.deleteById(teamId);
+                return true;
+            }
+            return false;
+        } catch (Exception e) {
+            throw new RuntimeException("Error deleting team: " + e.getMessage());
+        }
     }
 } 

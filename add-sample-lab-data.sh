@@ -5,7 +5,9 @@ echo "========================"
 
 # Get admin token
 echo "1. Getting admin token..."
-ADMIN_RESPONSE=$(curl -s -X POST "http://localhost:8081/login" -H "Content-Type: application/json" -d '{"username":"admin","password":"admin123"}')
+ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+ADMIN_RESPONSE=$(curl -s -X POST "http://localhost:8081/login" -H "Content-Type: application/json" -d "{\"username\":\"$ADMIN_USERNAME\",\"password\":\"$ADMIN_PASSWORD\"}")
 ADMIN_TOKEN=$(echo "$ADMIN_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 
 if [ -z "$ADMIN_TOKEN" ]; then
@@ -32,7 +34,9 @@ echo "Lab creation response: $LAB_RESPONSE"
 
 # Get demo token
 echo "3. Getting demo user token..."
-DEMO_RESPONSE=$(curl -s -X POST "http://localhost:8081/login" -H "Content-Type: application/json" -d '{"username":"demo","password":"demo123"}')
+DEMO_USERNAME=${DEMO_USERNAME:-demo}
+DEMO_PASSWORD=${DEMO_PASSWORD:-demo}
+DEMO_RESPONSE=$(curl -s -X POST "http://localhost:8081/login" -H "Content-Type: application/json" -d "{\"username\":\"$DEMO_USERNAME\",\"password\":\"$DEMO_PASSWORD\"}")
 DEMO_TOKEN=$(echo "$DEMO_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 
 if [ -z "$DEMO_TOKEN" ]; then
@@ -97,6 +101,6 @@ echo "✅ Added demo as PhD Student"
 echo ""
 echo "📱 Test the lab/team context selector:"
 echo "1. Go to http://localhost:12000"
-echo "2. Log in as admin (admin/admin123) or demo (demo/demo123)"
+echo "2. Log in with your credentials (use environment variables ADMIN_USERNAME/ADMIN_PASSWORD)"
 echo "3. Navigate to Data Upload or Data Management"
 echo "4. You should see 'Gabriel Lab (LAB001)' in the context selector" 

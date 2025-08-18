@@ -262,6 +262,23 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
         }
     }
+
+    /**
+     * Super Admin endpoint to get all users with their lab and team memberships
+     */
+    @GetMapping("/admin/system/users/all-with-organizations")
+    public ResponseEntity<?> getAllUsersWithOrganizationsForSuperAdmin(@RequestHeader("X-Username") String adminUsername) {
+        try {
+            if (!userService.isSuperAdmin(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            List<Map<String, Object>> usersWithOrganizations = userService.getAllUsersWithOrganizations();
+            return ResponseEntity.ok(usersWithOrganizations);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
+        }
+    }
     
     @GetMapping("/admin/users/deactivated")
     public ResponseEntity<?> getDeactivatedUsers(@RequestHeader("X-Username") String adminUsername) {
@@ -295,6 +312,46 @@ public class UserController {
     public ResponseEntity<String> activateUser(@PathVariable Long userId, @RequestHeader("X-Username") String adminUsername) {
         try {
             boolean success = userService.activateUser(userId, adminUsername);
+            if (success) {
+                return ResponseEntity.ok("User activated successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Failed to activate user");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    /**
+     * Super Admin endpoint to deactivate any user account
+     */
+    @PostMapping("/admin/system/users/{userId}/deactivate")
+    public ResponseEntity<String> deactivateUserBySuperAdmin(@PathVariable Long userId, @RequestHeader("X-Username") String adminUsername) {
+        try {
+            if (!userService.isSuperAdmin(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            boolean success = userService.deactivateUserBySuperAdmin(userId, adminUsername);
+            if (success) {
+                return ResponseEntity.ok("User deactivated successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Failed to deactivate user");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    /**
+     * Super Admin endpoint to activate any user account
+     */
+    @PostMapping("/admin/system/users/{userId}/activate")
+    public ResponseEntity<String> activateUserBySuperAdmin(@PathVariable Long userId, @RequestHeader("X-Username") String adminUsername) {
+        try {
+            if (!userService.isSuperAdmin(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            boolean success = userService.activateUserBySuperAdmin(userId, adminUsername);
             if (success) {
                 return ResponseEntity.ok("User activated successfully");
             } else {
@@ -2280,6 +2337,234 @@ public class UserController {
             return ResponseEntity.ok("Successfully left the lab");
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    // ==================== SUPER ADMIN ENDPOINTS ====================
+    
+    /**
+     * Get system overview (Super Admin only)
+     */
+    @GetMapping("/admin/system/overview")
+    public ResponseEntity<?> getSystemOverview(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin required");
+            }
+            
+            List<Map<String, Object>> overview = userService.getSystemOverview();
+            return ResponseEntity.ok(overview);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get all labs with members (Super Admin only)
+     */
+    @GetMapping("/admin/system/labs")
+    public ResponseEntity<?> getAllLabsWithMembers(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin required");
+            }
+            
+            List<Map<String, Object>> labs = userService.getAllLabsWithMembers();
+            return ResponseEntity.ok(labs);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get all teams with members (Super Admin only)
+     */
+    @GetMapping("/admin/system/teams")
+    public ResponseEntity<?> getAllTeamsWithMembers(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin required");
+            }
+            
+            List<Map<String, Object>> teams = userService.getAllTeamsWithMembers();
+            return ResponseEntity.ok(teams);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Get all users with full details (Super Admin only)
+     */
+    @GetMapping("/admin/system/users")
+    public ResponseEntity<?> getAllUsersWithFullDetails(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin required");
+            }
+            
+            List<Map<String, Object>> users = userService.getAllUsersWithOrganizations();
+            return ResponseEntity.ok(users);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Check if user is Super Admin
+     */
+    @GetMapping("/admin/system/check-super-admin")
+    public ResponseEntity<?> checkSuperAdmin(@RequestHeader("X-Username") String username) {
+        try {
+            boolean isSuperAdmin = userService.isSuperAdmin(username);
+            Map<String, Object> response = new HashMap<>();
+            response.put("isSuperAdmin", isSuperAdmin);
+            response.put("username", username);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    // ==================== SUPER ADMIN DELETE ENDPOINTS ====================
+    
+    /**
+     * Delete a user (Super Admin only)
+     */
+    @DeleteMapping("/admin/system/users/{userId}")
+    public ResponseEntity<?> deleteUser(@PathVariable Long userId, @RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean deleted = userService.deleteUserById(userId);
+            if (deleted) {
+                return ResponseEntity.ok("User deleted successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deleting user: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Delete a lab (Super Admin only)
+     */
+    @DeleteMapping("/admin/system/labs/{labId}")
+    public ResponseEntity<?> deleteLab(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean deleted = userService.deleteLabById(labId);
+            if (deleted) {
+                return ResponseEntity.ok("Lab deleted successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Lab not found");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deleting lab: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Delete a team (Super Admin only)
+     */
+    @DeleteMapping("/admin/system/teams/{teamId}")
+    public ResponseEntity<?> deleteTeam(@PathVariable Long teamId, @RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean deleted = userService.deleteTeamById(teamId);
+            if (deleted) {
+                return ResponseEntity.ok("Team deleted successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Team not found");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deleting team: " + e.getMessage());
+        }
+    }
+    
+    // ==================== SUPER ADMIN BULK DEACTIVATION ENDPOINTS ====================
+    
+    /**
+     * Deactivate all user accounts (Super Admin only)
+     */
+    @PostMapping("/admin/system/users/deactivate-all")
+    public ResponseEntity<?> deactivateAllUsers(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean success = userService.deactivateAllUsers(username);
+            if (success) {
+                return ResponseEntity.ok("All user accounts deactivated successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("No users were deactivated");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deactivating users: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Deactivate all users except Super Admin accounts (Super Admin only)
+     */
+    @PostMapping("/admin/system/users/deactivate-all-non-super-admin")
+    public ResponseEntity<?> deactivateAllNonSuperAdminUsers(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean success = userService.deactivateAllNonSuperAdminUsers(username);
+            if (success) {
+                return ResponseEntity.ok("All non-Super Admin accounts deactivated successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("No users were deactivated");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deactivating users: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Activate all user accounts (Super Admin only)
+     */
+    @PostMapping("/admin/system/users/activate-all")
+    public ResponseEntity<?> activateAllUsers(@RequestHeader("X-Username") String username) {
+        try {
+            if (!userService.isSuperAdmin(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Super Admin privileges required");
+            }
+            
+            boolean success = userService.activateAllUsers(username);
+            if (success) {
+                return ResponseEntity.ok("All user accounts activated successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("No users were activated");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error activating users: " + e.getMessage());
         }
     }
 }

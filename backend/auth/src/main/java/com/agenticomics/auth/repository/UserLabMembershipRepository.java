@@ -33,4 +33,9 @@ public interface UserLabMembershipRepository extends JpaRepository<UserLabMember
     
     @Query("SELECT ulm FROM UserLabMembership ulm WHERE ulm.lab.id IN :labIds AND ulm.isActive = true")
     List<UserLabMembership> findByLabIdInAndIsActiveTrue(@Param("labIds") List<Long> labIds);
+    
+    // Delete methods for Super Admin
+    void deleteByUserId(Long userId);
+    
+    void deleteByLabId(Long labId);
 } 
