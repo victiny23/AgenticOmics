@@ -14,6 +14,8 @@ import PipelinePage from './pages/PipelinePage'
 import ResultPage from './pages/ResultPage'
 import LoginPage from './pages/LoginPage'
 import RestrictedDashboardPage from './pages/RestrictedDashboardPage'
+import RestrictedAccessPage from './pages/RestrictedAccessPage'
+import ActivationRequestsPage from './pages/ActivationRequestsPage'
 import UserManagementPage from './pages/UserManagementPage'
 import SystemAdministrationPage from './pages/SystemAdministrationPage'
 import SettingsPage from './pages/SettingsPage'
@@ -26,6 +28,7 @@ function App() {
           {/* Public routes - no layout */}
           <Route path="/" element={<WelcomePage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/restricted-access" element={<RestrictedAccessPage />} />
           
           {/* Protected routes - with layout */}
           <Route path="/welcome" element={
@@ -44,6 +47,13 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <UserManagementPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/activation-requests" element={
+            <ProtectedRoute>
+              <Layout>
+                <ActivationRequestsPage />
               </Layout>
             </ProtectedRoute>
           } />

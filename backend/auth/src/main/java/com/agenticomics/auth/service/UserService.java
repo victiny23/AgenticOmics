@@ -770,6 +770,46 @@ public class UserService {
     }
     
     /**
+     * Check if a user can activate another user (Super Admin or PI/Team Leader)
+     */
+    public boolean canActivateUser(String targetUsername, String requesterUsername) {
+        // Super Admin can activate any user
+        if (isSuperAdmin(requesterUsername)) {
+            return true;
+        }
+        
+        // Get the target user's lab/team memberships
+        List<UserLabMembershipDto> targetLabMemberships = getUserLabMemberships(targetUsername);
+        List<UserTeamMembershipDto> targetTeamMemberships = getUserTeamMemberships(targetUsername);
+        
+        // Get the requester's lab/team memberships
+        List<UserLabMembershipDto> requesterLabMemberships = getUserLabMemberships(requesterUsername);
+        List<UserTeamMembershipDto> requesterTeamMemberships = getUserTeamMemberships(requesterUsername);
+        
+        // Check if requester is Lab PI of any lab where target user is a member
+        for (UserLabMembershipDto targetLab : targetLabMemberships) {
+            for (UserLabMembershipDto requesterLab : requesterLabMemberships) {
+                if (targetLab.getLabId().equals(requesterLab.getLabId()) && 
+                    "Lab PI".equals(requesterLab.getRoleInLab())) {
+                    return true;
+                }
+            }
+        }
+        
+        // Check if requester is Team Leader of any team where target user is a member
+        for (UserTeamMembershipDto targetTeam : targetTeamMemberships) {
+            for (UserTeamMembershipDto requesterTeam : requesterTeamMemberships) {
+                if (targetTeam.getTeamId().equals(requesterTeam.getTeamId()) && 
+                    "Team Leader".equals(requesterTeam.getRoleInTeam())) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
      * Deactivate all user accounts (Super Admin only)
      */
     @Transactional

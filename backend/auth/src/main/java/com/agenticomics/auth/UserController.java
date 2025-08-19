@@ -37,6 +37,9 @@ import com.agenticomics.auth.dto.TeamApplicationResponse;
 import com.agenticomics.auth.dto.ApplicationReviewRequest;
 import com.agenticomics.auth.service.LabApplicationService;
 import com.agenticomics.auth.service.TeamApplicationService;
+import com.agenticomics.auth.service.ActivationRequestService;
+import com.agenticomics.auth.entity.ActivationRequest;
+import java.util.ArrayList;
 
 @RestController
 public class UserController {
@@ -76,6 +79,9 @@ public class UserController {
     
     @Autowired
     private TeamApplicationService teamApplicationService;
+    
+    @Autowired
+    private ActivationRequestService activationRequestService;
     
     @Value("${app.upload-dir:./data/uploads/profile-photos}")
     private String uploadDir;
@@ -1956,8 +1962,14 @@ public class UserController {
             boolean canDelete = false;
             String reason = "";
             
+            // Check if user is Super Admin - Super Admin can delete any file
+            if (userService.isSuperAdmin(username)) {
+                canDelete = true;
+                reason = "User is Super Admin";
+                System.out.println("User is Super Admin - can delete any file");
+            }
             // User can always delete their own files
-            if (username.equals(fileUploadedBy)) {
+            else if (username.equals(fileUploadedBy)) {
                 canDelete = true;
                 reason = "User owns the file";
                 System.out.println("User owns the file");
@@ -2049,25 +2061,32 @@ public class UserController {
             boolean canView = false;
             String reason = "";
             
-            // Check if user is a member of this lab
-            List<UserLabMembershipDto> labMemberships = userService.getUserLabMemberships(username);
-            System.out.println("Found " + labMemberships.size() + " lab memberships");
-            
-            for (UserLabMembershipDto membership : labMemberships) {
-                System.out.println("Membership: " + membership);
-                System.out.println("Comparing labId: " + labId + " with membership.getLabId(): " + membership.getLabId());
+            // Check if user is Super Admin - Super Admin can view any lab files
+            if (userService.isSuperAdmin(username)) {
+                canView = true;
+                reason = "User is Super Admin";
+                System.out.println("User is Super Admin - can view any lab files");
+            } else {
+                // Check if user is a member of this lab
+                List<UserLabMembershipDto> labMemberships = userService.getUserLabMemberships(username);
+                System.out.println("Found " + labMemberships.size() + " lab memberships");
                 
-                if (labId.equals(membership.getLabId())) {
-                    canView = true;
-                    reason = "User is a member of this lab with role: " + membership.getRoleInLab();
-                    System.out.println("User is a member of this lab");
-                    break;
+                for (UserLabMembershipDto membership : labMemberships) {
+                    System.out.println("Membership: " + membership);
+                    System.out.println("Comparing labId: " + labId + " with membership.getLabId(): " + membership.getLabId());
+                    
+                    if (labId.equals(membership.getLabId())) {
+                        canView = true;
+                        reason = "User is a member of this lab with role: " + membership.getRoleInLab();
+                        System.out.println("User is a member of this lab");
+                        break;
+                    }
                 }
-            }
-            
-            if (!canView) {
-                reason = "User is not a member of this lab";
-                System.out.println("User is not a member of this lab");
+                
+                if (!canView) {
+                    reason = "User is not a member of this lab";
+                    System.out.println("User is not a member of this lab");
+                }
             }
             
             Map<String, Object> response = new HashMap<>();
@@ -2111,25 +2130,32 @@ public class UserController {
             boolean canView = false;
             String reason = "";
             
-            // Check if user is a member of this team
-            List<UserTeamMembershipDto> teamMemberships = userService.getUserTeamMemberships(username);
-            System.out.println("Found " + teamMemberships.size() + " team memberships");
-            
-            for (UserTeamMembershipDto membership : teamMemberships) {
-                System.out.println("Membership: " + membership);
-                System.out.println("Comparing teamId: " + teamId + " with membership.getTeamId(): " + membership.getTeamId());
+            // Check if user is Super Admin - Super Admin can view any team files
+            if (userService.isSuperAdmin(username)) {
+                canView = true;
+                reason = "User is Super Admin";
+                System.out.println("User is Super Admin - can view any team files");
+            } else {
+                // Check if user is a member of this team
+                List<UserTeamMembershipDto> teamMemberships = userService.getUserTeamMemberships(username);
+                System.out.println("Found " + teamMemberships.size() + " team memberships");
                 
-                if (teamId.equals(membership.getTeamId())) {
-                    canView = true;
-                    reason = "User is a member of this team with role: " + membership.getRoleInTeam();
-                    System.out.println("User is a member of this team");
-                    break;
+                for (UserTeamMembershipDto membership : teamMemberships) {
+                    System.out.println("Membership: " + membership);
+                    System.out.println("Comparing teamId: " + teamId + " with membership.getTeamId(): " + membership.getTeamId());
+                    
+                    if (teamId.equals(membership.getTeamId())) {
+                        canView = true;
+                        reason = "User is a member of this team with role: " + membership.getRoleInTeam();
+                        System.out.println("User is a member of this team");
+                        break;
+                    }
                 }
-            }
-            
-            if (!canView) {
-                reason = "User is not a member of this team";
-                System.out.println("User is not a member of this team");
+                
+                if (!canView) {
+                    reason = "User is not a member of this team";
+                    System.out.println("User is not a member of this team");
+                }
             }
             
             Map<String, Object> response = new HashMap<>();
@@ -2565,6 +2591,130 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error activating users: " + e.getMessage());
+        }
+    }
+    
+    // ==================== ACTIVATION REQUEST ENDPOINTS ====================
+    
+    /**
+     * Create an activation request (for deactivated users)
+     */
+    @PostMapping("/request-activation")
+    public ResponseEntity<?> requestActivation(@RequestBody Map<String, Object> request) {
+        try {
+            String username = (String) request.get("username");
+            String requestMessage = (String) request.get("requestMessage");
+            
+            if (username == null || username.trim().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Username is required");
+            }
+            
+            ActivationRequest activationRequest = activationRequestService.createActivationRequest(username, requestMessage);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Activation request created successfully");
+            response.put("requestId", activationRequest.getId());
+            response.put("status", activationRequest.getStatus());
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error creating activation request: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get pending activation requests (for PIs/Team Leaders and Super Admin)
+     */
+    @GetMapping("/admin/activation-requests/pending")
+    public ResponseEntity<?> getPendingActivationRequests(@RequestHeader("X-Username") String username) {
+        try {
+            // Check if user has permission to view activation requests
+            if (!userService.isSuperAdmin(username)) {
+                // For non-Super Admins, check if they are PI/Team Leader
+                List<UserLabMembershipDto> labMemberships = userService.getUserLabMemberships(username);
+                List<UserTeamMembershipDto> teamMemberships = userService.getUserTeamMemberships(username);
+                
+                boolean hasPermission = false;
+                for (UserLabMembershipDto lab : labMemberships) {
+                    if ("Lab PI".equals(lab.getRoleInLab())) {
+                        hasPermission = true;
+                        break;
+                    }
+                }
+                for (UserTeamMembershipDto team : teamMemberships) {
+                    if ("Team Leader".equals(team.getRoleInTeam())) {
+                        hasPermission = true;
+                        break;
+                    }
+                }
+                
+                if (!hasPermission) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Only PIs, Team Leaders, and Super Admins can view activation requests");
+                }
+            }
+            
+            List<ActivationRequest> pendingRequests = activationRequestService.getPendingRequests();
+            
+            List<Map<String, Object>> response = new ArrayList<>();
+            for (ActivationRequest request : pendingRequests) {
+                Map<String, Object> requestInfo = new HashMap<>();
+                requestInfo.put("id", request.getId());
+                requestInfo.put("username", request.getUsername());
+                requestInfo.put("email", request.getEmail());
+                requestInfo.put("requestMessage", request.getRequestMessage());
+                requestInfo.put("status", request.getStatus());
+                requestInfo.put("requestedAt", request.getRequestedAt());
+                response.add(requestInfo);
+            }
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving activation requests: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Approve an activation request
+     */
+    @PostMapping("/admin/activation-requests/{requestId}/approve")
+    public ResponseEntity<?> approveActivationRequest(@PathVariable Long requestId, @RequestHeader("X-Username") String username) {
+        try {
+            boolean success = activationRequestService.approveActivationRequest(requestId, username);
+            if (success) {
+                return ResponseEntity.ok("Activation request approved successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Failed to approve activation request");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error approving activation request: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Reject an activation request
+     */
+    @PostMapping("/admin/activation-requests/{requestId}/reject")
+    public ResponseEntity<?> rejectActivationRequest(@PathVariable Long requestId, @RequestHeader("X-Username") String username, @RequestBody Map<String, Object> request) {
+        try {
+            String reason = (String) request.get("reason");
+            if (reason == null) {
+                reason = "No reason provided";
+            }
+            
+            boolean success = activationRequestService.rejectActivationRequest(requestId, username, reason);
+            if (success) {
+                return ResponseEntity.ok("Activation request rejected successfully");
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Failed to reject activation request");
+            }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error rejecting activation request: " + e.getMessage());
         }
     }
 }

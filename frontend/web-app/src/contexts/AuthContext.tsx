@@ -107,8 +107,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const token = localStorage.getItem('jwtToken');
       const currentUsername = localStorage.getItem('username');
+      const storedIsActive = localStorage.getItem('isActive');
       
       if (!token || !currentUsername) {
+        return false;
+      }
+
+      // For deactivated users, don't check profile endpoint
+      if (storedIsActive === 'false') {
+        console.log('User is deactivated, skipping profile check');
         return false;
       }
 
@@ -165,7 +172,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const token = localStorage.getItem('jwtToken');
       const currentUsername = localStorage.getItem('username');
+      const storedIsActive = localStorage.getItem('isActive');
+      
       if (!token || !currentUsername) return;
+      
+      // Skip profile refresh for deactivated users
+      if (storedIsActive === 'false') {
+        console.log('Skipping profile refresh for deactivated user');
+        return;
+      }
       
       // Get basic profile info (non-sensitive)
       const res = await fetch('http://localhost:12001/api/auth/profile', {
@@ -195,7 +210,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      refreshProfile();
+      const storedIsActive = localStorage.getItem('isActive');
+      // Only refresh profile for active users
+      if (storedIsActive !== 'false') {
+        refreshProfile();
+      }
     }
   }, [isAuthenticated, username]);
 

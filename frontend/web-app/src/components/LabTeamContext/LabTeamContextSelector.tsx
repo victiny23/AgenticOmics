@@ -217,40 +217,120 @@ const LabTeamContextSelector: React.FC<LabTeamContextSelectorProps> = ({
 
       const token = localStorage.getItem('jwtToken');
       
-              const response = await fetch('http://localhost:12001/api/auth/profile', {
+      // First, check if user is Super Admin
+      const superAdminCheck = await fetch('http://localhost:12001/api/auth/admin/system/check-super-admin', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'X-Username': username,
         },
       });
 
-      if (response.ok) {
-        const profileData = await response.json();
-        console.log('Profile data received:', profileData);
+      let isSuperAdmin = false;
+      if (superAdminCheck.ok) {
+        const superAdminData = await superAdminCheck.json();
+        isSuperAdmin = superAdminData.isSuperAdmin;
+        console.log('Super Admin check result:', isSuperAdmin);
+      }
+
+      if (isSuperAdmin) {
+        // Super Admin: Load all labs and teams
+        console.log('Loading all labs and teams for Super Admin');
         
-        if (profileData.labMemberships && Array.isArray(profileData.labMemberships)) {
-          const activeLabs = profileData.labMemberships.filter((lab: any) => lab.isActive);
-          console.log('Active labs loaded:', activeLabs);
-          console.log('Lab memberships count:', activeLabs.length);
-          setLabMemberships(activeLabs);
-        } else {
-          console.log('No lab memberships found in profile data');
-          setLabMemberships([]);
+        const [labsResponse, teamsResponse] = await Promise.all([
+          fetch('http://localhost:12001/api/auth/admin/system/labs', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'X-Username': username,
+            },
+          }),
+          fetch('http://localhost:12001/api/auth/admin/system/teams', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'X-Username': username,
+            },
+          })
+        ]);
+
+        if (labsResponse.ok) {
+          const allLabs = await labsResponse.json();
+          console.log('All labs loaded for Super Admin:', allLabs);
+          // Convert to the expected format
+          const formattedLabs = allLabs.map((lab: any) => ({
+            id: lab.id,
+            userId: 0, // Super Admin doesn't have a specific user ID in the lab
+            username: username,
+            labId: lab.id,
+            labName: lab.labName,
+            labCode: lab.labId, // Use labId as labCode since that's where the code is stored
+            roleInLab: 'Super Admin',
+            memberId: 'SUPER_ADMIN',
+            isPrimaryLab: false,
+            joinedAt: lab.createdAt,
+            isActive: true,
+            createdAt: lab.createdAt,
+            updatedAt: lab.updatedAt
+          }));
+          setLabMemberships(formattedLabs);
         }
-        
-        if (profileData.teamMemberships && Array.isArray(profileData.teamMemberships)) {
-          const activeTeams = profileData.teamMemberships.filter((team: any) => team.isActive);
-          console.log('Active teams loaded:', activeTeams);
-          console.log('Team memberships count:', activeTeams.length);
-          setTeamMemberships(activeTeams);
-        } else {
-          console.log('No team memberships found in profile data');
-          setTeamMemberships([]);
+
+        if (teamsResponse.ok) {
+          const allTeams = await teamsResponse.json();
+          console.log('All teams loaded for Super Admin:', allTeams);
+          // Convert to the expected format
+          const formattedTeams = allTeams.map((team: any) => ({
+            id: team.id,
+            userId: 0, // Super Admin doesn't have a specific user ID in the team
+            username: username,
+            teamId: team.id,
+            teamName: team.teamName,
+            teamIdCode: team.teamIdCode || team.teamId, // Use teamIdCode if available, otherwise teamId
+            roleInTeam: 'Super Admin',
+            memberId: 'SUPER_ADMIN',
+            isPrimaryTeam: false,
+            joinedAt: team.createdAt,
+            isActive: true,
+            createdAt: team.createdAt,
+            updatedAt: team.updatedAt
+          }));
+          setTeamMemberships(formattedTeams);
         }
       } else {
-        console.error('Failed to load profile data:', response.status, response.statusText);
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
+        // Regular user: Load their memberships
+        const response = await fetch('http://localhost:12001/api/auth/profile', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Username': username,
+          },
+        });
+
+        if (response.ok) {
+          const profileData = await response.json();
+          console.log('Profile data received:', profileData);
+          
+          if (profileData.labMemberships && Array.isArray(profileData.labMemberships)) {
+            const activeLabs = profileData.labMemberships.filter((lab: any) => lab.isActive);
+            console.log('Active labs loaded:', activeLabs);
+            console.log('Lab memberships count:', activeLabs.length);
+            setLabMemberships(activeLabs);
+          } else {
+            console.log('No lab memberships found in profile data');
+            setLabMemberships([]);
+          }
+          
+          if (profileData.teamMemberships && Array.isArray(profileData.teamMemberships)) {
+            const activeTeams = profileData.teamMemberships.filter((team: any) => team.isActive);
+            console.log('Active teams loaded:', activeTeams);
+            console.log('Team memberships count:', activeTeams.length);
+            setTeamMemberships(activeTeams);
+          } else {
+            console.log('No team memberships found in profile data');
+            setTeamMemberships([]);
+          }
+        } else {
+          console.error('Failed to load profile data:', response.status, response.statusText);
+          const errorText = await response.text();
+          console.error('Error response:', errorText);
+        }
       }
 
     } catch (err) {

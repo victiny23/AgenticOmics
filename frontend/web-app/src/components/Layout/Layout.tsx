@@ -29,6 +29,7 @@ import {
   AccountCircle,
   Settings,
   Logout,
+  NotificationsActive,
 } from '@mui/icons-material'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -291,6 +292,51 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   sx: {
                     color: location.pathname === '/admin/users' ? 'white' : '#e0e0e0',
                     fontWeight: location.pathname === '/admin/users' ? 600 : 400,
+                  },
+                }}
+                secondaryTypographyProps={{
+                  sx: {
+                    color: '#888',
+                    fontSize: '0.75rem',
+                  },
+                }}
+              />
+            </ListItemButton>
+          </ListItem>
+        )}
+        
+        {/* Activation Requests for PI users and Super Admin */}
+        {(role === 'Lab PI' || role === 'Super Admin') && (
+          <ListItem disablePadding sx={{ mb: 1 }}>
+            <ListItemButton
+              onClick={() => handleNavigation('/admin/activation-requests')}
+              sx={{
+                borderRadius: 2,
+                mx: 1,
+                backgroundColor: location.pathname === '/admin/activation-requests' ? 'rgba(25, 118, 210, 0.2)' : 'transparent',
+                '&:hover': {
+                  backgroundColor: location.pathname === '/admin/activation-requests' 
+                    ? 'rgba(25, 118, 210, 0.3)' 
+                    : 'rgba(255, 255, 255, 0.1)',
+                },
+                border: location.pathname === '/admin/activation-requests' ? '1px solid rgba(25, 118, 210, 0.5)' : '1px solid transparent',
+              }}
+            >
+              <ListItemIcon
+                sx={{
+                  color: location.pathname === '/admin/activation-requests' ? '#42a5f5' : '#b0b0b0',
+                  minWidth: 40,
+                }}
+              >
+                <NotificationsActive />
+              </ListItemIcon>
+              <ListItemText
+                primary="Activation Requests"
+                secondary="Review and approve account activation requests"
+                primaryTypographyProps={{
+                  sx: {
+                    color: location.pathname === '/admin/activation-requests' ? 'white' : '#e0e0e0',
+                    fontWeight: location.pathname === '/admin/activation-requests' ? 600 : 400,
                   },
                 }}
                 secondaryTypographyProps={{

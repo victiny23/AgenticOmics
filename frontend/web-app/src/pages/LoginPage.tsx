@@ -161,14 +161,19 @@ const LoginPage: React.FC = () => {
       const isActive = response.data.isActive !== false; // Default to true if not provided
       login(response.data.token, response.data.username, response.data.role, isActive);
       
-      // Refresh profile to get photo URL and other sensitive data
-      await refreshProfile();
+      // Store user email for activation requests
+      if (response.data.email) {
+        localStorage.setItem('userEmail', response.data.email);
+      }
       
       // Navigate based on user status
       if (isActive) {
+        // Refresh profile to get photo URL and other sensitive data
+        await refreshProfile();
         navigate('/welcome');
       } else {
-        navigate('/restricted');
+        // For deactivated users, redirect to restricted access page
+        navigate('/restricted-access');
       }
     } catch (err: any) {
       if (err.response && err.response.data) {

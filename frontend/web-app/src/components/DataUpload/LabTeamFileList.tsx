@@ -94,42 +94,107 @@ const LabTeamFileList: React.FC<LabTeamFileListProps> = ({ refreshTrigger = 0 })
 
     try {
       const token = localStorage.getItem('jwtToken');
-      const response = await fetch('http://localhost:12001/api/auth/profile', {
+      
+      // First, check if user is Super Admin
+      const superAdminCheck = await fetch('http://localhost:12001/api/auth/admin/system/check-super-admin', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'X-Username': username,
         },
       });
 
-      if (response.ok) {
-        const profile = await response.json();
+      let isSuperAdmin = false;
+      if (superAdminCheck.ok) {
+        const superAdminData = await superAdminCheck.json();
+        isSuperAdmin = superAdminData.isSuperAdmin;
+        console.log('Super Admin check result for file list:', isSuperAdmin);
+      }
+
+      if (isSuperAdmin) {
+        // Super Admin: Load all labs and teams
+        console.log('Loading all labs and teams for Super Admin file list');
+        
+        const [labsResponse, teamsResponse] = await Promise.all([
+          fetch('http://localhost:12001/api/auth/admin/system/labs', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'X-Username': username,
+            },
+          }),
+          fetch('http://localhost:12001/api/auth/admin/system/teams', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'X-Username': username,
+            },
+          })
+        ]);
+
         const contexts: Array<{type: 'LAB' | 'TEAM', id: number, name: string, code: string}> = [];
 
-        // Add lab contexts
-        if (profile.labMemberships) {
-          profile.labMemberships.forEach((lab: any) => {
+        if (labsResponse.ok) {
+          const allLabs = await labsResponse.json();
+          allLabs.forEach((lab: any) => {
             contexts.push({
               type: 'LAB',
-              id: lab.labId,
+              id: lab.id,
               name: lab.labName,
-              code: lab.labCode
+              code: lab.labId // Use labId as code since that's where the code is stored
             });
           });
         }
 
-        // Add team contexts
-        if (profile.teamMemberships) {
-          profile.teamMemberships.forEach((team: any) => {
+        if (teamsResponse.ok) {
+          const allTeams = await teamsResponse.json();
+          allTeams.forEach((team: any) => {
             contexts.push({
               type: 'TEAM',
-              id: team.teamId,
+              id: team.id,
               name: team.teamName,
-              code: team.teamIdCode
+              code: team.teamIdCode || team.teamId // Use teamIdCode if available, otherwise teamId
             });
           });
         }
 
         setAvailableContexts(contexts);
+      } else {
+        // Regular user: Load their memberships
+        const response = await fetch('http://localhost:12001/api/auth/profile', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Username': username,
+          },
+        });
+
+        if (response.ok) {
+          const profile = await response.json();
+          const contexts: Array<{type: 'LAB' | 'TEAM', id: number, name: string, code: string}> = [];
+
+          // Add lab contexts
+          if (profile.labMemberships) {
+            profile.labMemberships.forEach((lab: any) => {
+              contexts.push({
+                type: 'LAB',
+                id: lab.labId,
+                name: lab.labName,
+                code: lab.labCode
+              });
+            });
+          }
+
+          // Add team contexts
+          if (profile.teamMemberships) {
+            profile.teamMemberships.forEach((team: any) => {
+              contexts.push({
+                type: 'TEAM',
+                id: team.teamId,
+                name: team.teamName,
+                code: team.teamIdCode
+              });
+            });
+          }
+
+          setAvailableContexts(contexts);
+        }
       }
     } catch (err) {
       console.error('Error loading available contexts:', err);
@@ -303,7 +368,7 @@ const LabTeamFileList: React.FC<LabTeamFileListProps> = ({ refreshTrigger = 0 })
             {availableContexts.map((context) => (
               <MenuItem key={`${context.type}_${context.id}`} value={`${context.type}_${context.id}`}>
                 {context.type === 'LAB' ? <Business sx={{ mr: 1 }} /> : <Group sx={{ mr: 1 }} />}
-                {context.name} ({context.code})
+                {context.name} ({context.code}) - ID: {context.id}
               </MenuItem>
             ))}
           </Select>
@@ -318,7 +383,7 @@ const LabTeamFileList: React.FC<LabTeamFileListProps> = ({ refreshTrigger = 0 })
               {getContextIcon(selectedContextInfo.type)}
               <Box sx={{ flex: 1 }}>
                 <Typography variant="h6" fontWeight="medium">
-                  {selectedContextInfo.name} ({selectedContextInfo.code})
+                  {selectedContextInfo.name} ({selectedContextInfo.code}) - ID: {selectedContextInfo.id}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {files.length} file{files.length !== 1 ? 's' : ''} • {formatFileSize(totalSize)}

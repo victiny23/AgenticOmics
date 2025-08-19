@@ -34,11 +34,7 @@ sleep 2
 echo ""
 echo "🔍 Checking port status..."
 if command -v lsof >/dev/null 2>&1; then
-<<<<<<< HEAD
     for port in 12000 12001 8081 8082; do
-=======
-    for port in 3000 8080 8081 8082; do
->>>>>>> develop
         if lsof -i :$port >/dev/null 2>&1; then
             echo "   ⚠️  Port $port still in use"
         else
