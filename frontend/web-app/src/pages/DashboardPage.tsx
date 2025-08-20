@@ -70,7 +70,7 @@ const DashboardPage: React.FC = () => {
 
   const capabilities = [
     'Multi-omics data support (Genomics, Transcriptomics, Proteomics)',
-    'Standard file formats (FASTQ, BAM, VCF, CSV, H5AD)',
+    'Comprehensive file formats (Omics, Documents, Media, Archives)',
     'AI-powered analysis recommendations',
     'Interactive data visualizations',
     'Automated quality control',

@@ -35,6 +35,8 @@ import {
   Storage,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
+import FileViewer from './FileViewer';
+
 
 interface FileData {
   id: number;
@@ -42,6 +44,8 @@ interface FileData {
   originalFilename: string;
   fileSize: number;
   fileType: string;
+  fileExtension: string;
+  contentType: string;
   uploadedBy: string;
   uploadedAt: string;
   description: string;
@@ -49,6 +53,9 @@ interface FileData {
   isPublic: boolean;
   status: string;
   validationStatus: string;
+  validationMessage: string;
+  metadata: string;
+  checksum: string;
   labId: number | null;
   labName: string | null;
   teamId: number | null;
@@ -72,6 +79,14 @@ const LabTeamFileList: React.FC<LabTeamFileListProps> = ({ refreshTrigger = 0 })
     code: string;
   }>>([]);
   const [selectedContext, setSelectedContext] = useState<string>('');
+  const [viewerDialog, setViewerDialog] = useState<{
+    open: boolean;
+    file: FileData | null;
+  }>({
+    open: false,
+    file: null,
+  });
+
 
   useEffect(() => {
     loadAvailableContexts();
@@ -236,6 +251,50 @@ const LabTeamFileList: React.FC<LabTeamFileListProps> = ({ refreshTrigger = 0 })
       alert('Error deleting file. Please try again.');
     }
   };
+
+  const handleDownload = async (fileId: number) => {
+    if (!username) return;
+
+    try {
+      const token = localStorage.getItem('jwtToken');
+      const response = await fetch(`http://localhost:12001/api/data/files/${fileId}/download`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username,
+        },
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = response.headers.get('content-disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        console.log('File downloaded successfully');
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to download file:', errorData);
+        alert(`Failed to download file: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error downloading file:', err);
+      alert('Error downloading file. Please try again.');
+    }
+  };
+
+  const handleView = (file: FileData) => {
+    setViewerDialog({ open: true, file });
+  };
+
+  const closeViewer = () => {
+    setViewerDialog({ open: false, file: null });
+  };
+
+
 
   const loadFiles = async () => {
     if (!username || !selectedContext) return;
@@ -447,12 +506,12 @@ const LabTeamFileList: React.FC<LabTeamFileListProps> = ({ refreshTrigger = 0 })
                 />
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Tooltip title="View file">
-                    <IconButton size="small">
+                    <IconButton size="small" onClick={() => handleView(file)}>
                       <Visibility />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Download file">
-                    <IconButton size="small">
+                    <IconButton size="small" onClick={() => handleDownload(file.id)}>
                       <Download />
                     </IconButton>
                   </Tooltip>
@@ -484,6 +543,15 @@ const LabTeamFileList: React.FC<LabTeamFileListProps> = ({ refreshTrigger = 0 })
           </CardContent>
         </Card>
       )}
+
+      {/* File Viewer Dialog */}
+      <FileViewer
+        open={viewerDialog.open}
+        onClose={closeViewer}
+        file={viewerDialog.file}
+        onDownload={handleDownload}
+      />
+
     </Box>
   );
 };

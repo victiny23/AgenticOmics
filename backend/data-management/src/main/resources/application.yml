@@ -43,7 +43,7 @@ app:
     # Maximum file size in bytes (100MB)
     max-file-size: 104857600
     # Allowed file extensions (comma-separated)
-    allowed-extensions: .fastq,.fq,.fasta,.fa,.bam,.sam,.vcf,.csv,.tsv,.xlsx,.xls,.bed,.gtf,.gff,.json,.xml,.zip,.tar.gz,.txt
+    allowed-extensions: .fastq,.fq,.fasta,.fa,.bam,.sam,.vcf,.csv,.tsv,.xlsx,.xls,.bed,.gtf,.gff,.json,.xml,.zip,.tar.gz,.txt,.pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.bmp,.svg,.webp,.mp4,.webm,.ogg,.mp3,.wav,.m4a,.md,.html,.htm,.css,.js
 
 # Eureka client configuration (disabled for now)
 eureka:

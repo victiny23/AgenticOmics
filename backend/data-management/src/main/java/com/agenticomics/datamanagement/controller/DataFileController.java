@@ -248,6 +248,119 @@ public class DataFileController {
     }
     
     /**
+     * Download a file
+     */
+    @GetMapping("/files/{id}/download")
+    public ResponseEntity<org.springframework.core.io.Resource> downloadFile(
+            @PathVariable Long id,
+            @RequestHeader("X-Username") String username) {
+        try {
+            log.info("Download request for file ID: {} by user: {}", id, username);
+            
+            org.springframework.core.io.Resource resource = dataFileService.downloadFile(id, username);
+            String originalFilename = dataFileService.getOriginalFilename(id);
+            String contentType = getContentTypeFromFilename(originalFilename);
+            
+            return ResponseEntity.ok()
+                    .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, contentType)
+                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, 
+                           "attachment; filename*=UTF-8''" + java.net.URLEncoder.encode(originalFilename, "UTF-8"))
+                    .body(resource);
+            
+        } catch (DataFileException e) {
+            log.error("Error downloading file with ID: {} by user: {}, error: {}", id, username, e.getMessage());
+            throw e;
+        } catch (java.io.UnsupportedEncodingException e) {
+            log.error("Error encoding filename for file with ID: {} by user: {}, error: {}", id, username, e.getMessage());
+            throw new DataFileException("Failed to process filename: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get content type based on file extension
+     */
+    private String getContentTypeFromFilename(String filename) {
+        if (filename == null) {
+            return "application/octet-stream";
+        }
+        
+        String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
+        
+        switch (extension) {
+            case "xlsx":
+                return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "xls":
+                return "application/vnd.ms-excel";
+            case "docx":
+            case "doc":
+                return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "pptx":
+            case "ppt":
+                return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case "pdf":
+                return "application/pdf";
+            case "txt":
+                return "text/plain";
+            case "csv":
+                return "text/csv";
+            case "json":
+                return "application/json";
+            case "xml":
+                return "application/xml";
+            case "jpg":
+            case "jpeg":
+                return "image/jpeg";
+            case "png":
+                return "image/png";
+            case "gif":
+                return "image/gif";
+            case "zip":
+                return "application/zip";
+            case "rar":
+                return "application/x-rar-compressed";
+            case "7z":
+                return "application/x-7z-compressed";
+            case "tar":
+                return "application/x-tar";
+            case "gz":
+                return "application/gzip";
+            default:
+                return "application/octet-stream";
+        }
+    }
+    
+
+    
+    /**
+     * View a file inline (for browser viewing)
+     */
+    @GetMapping("/files/{id}/view")
+    public ResponseEntity<org.springframework.core.io.Resource> viewFile(
+            @PathVariable Long id,
+            @RequestHeader("X-Username") String username) {
+        try {
+            log.info("View request for file ID: {} by user: {}", id, username);
+            
+            org.springframework.core.io.Resource resource = dataFileService.viewFile(id, username);
+            String originalFilename = dataFileService.getOriginalFilename(id);
+            String contentType = getContentTypeFromFilename(originalFilename);
+            
+            return ResponseEntity.ok()
+                    .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, contentType)
+                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, 
+                           "inline; filename*=UTF-8''" + java.net.URLEncoder.encode(originalFilename, "UTF-8"))
+                    .body(resource);
+            
+        } catch (DataFileException e) {
+            log.error("Error viewing file with ID: {} by user: {}, error: {}", id, username, e.getMessage());
+            throw e;
+        } catch (java.io.UnsupportedEncodingException e) {
+            log.error("Error encoding filename for file with ID: {} by user: {}, error: {}", id, username, e.getMessage());
+            throw new DataFileException("Failed to process filename: " + e.getMessage());
+        }
+    }
+
+    /**
      * Health check endpoint
      */
     @GetMapping("/health")

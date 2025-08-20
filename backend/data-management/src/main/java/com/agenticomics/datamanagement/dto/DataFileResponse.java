@@ -59,6 +59,7 @@ public class DataFileResponse {
                 .validationMessage(dataFile.getValidationMessage())
                 .metadata(dataFile.getMetadata())
                 .checksum(dataFile.getChecksum())
+                .downloadUrl("/api/data/files/" + dataFile.getId() + "/download")
                 .labId(dataFile.getLabId())
                 .labName(dataFile.getLabName())
                 .teamId(dataFile.getTeamId())

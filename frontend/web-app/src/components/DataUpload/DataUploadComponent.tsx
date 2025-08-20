@@ -112,25 +112,57 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-         accept: {
-       'application/fastq': ['.fastq', '.fq'],
-       'application/fasta': ['.fasta', '.fa'],
-       'application/bam': ['.bam'],
-       'application/sam': ['.sam'],
-       'application/vcf': ['.vcf'],
-       'text/csv': ['.csv'],
-       'text/tab-separated-values': ['.tsv'],
-       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-       'application/vnd.ms-excel': ['.xls'],
-       'application/bed': ['.bed'],
-       'application/gtf': ['.gtf'],
-       'application/gff': ['.gff'],
-       'application/json': ['.json'],
-       'application/xml': ['.xml'],
-       'application/zip': ['.zip'],
-       'application/x-gzip': ['.tar.gz'],
-       'text/plain': ['.txt'],
-     },
+    accept: {
+      // Omics Data Formats
+      'application/fastq': ['.fastq', '.fq'],
+      'application/fasta': ['.fasta', '.fa'],
+      'application/bam': ['.bam'],
+      'application/sam': ['.sam'],
+      'application/vcf': ['.vcf'],
+      'application/bed': ['.bed'],
+      'application/gtf': ['.gtf'],
+      'application/gff': ['.gff'],
+      
+      // Data & Analysis Formats
+      'text/csv': ['.csv'],
+      'text/tab-separated-values': ['.tsv'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel': ['.xls'],
+      'application/json': ['.json'],
+      'application/xml': ['.xml'],
+      
+      // Document Formats
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'application/vnd.ms-powerpoint': ['.ppt'],
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
+      
+      // Text & Web Formats
+      'text/plain': ['.txt'],
+      'text/markdown': ['.md'],
+      'text/html': ['.html', '.htm'],
+      'text/css': ['.css'],
+      'application/javascript': ['.js'],
+      
+      // Media Formats
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/gif': ['.gif'],
+      'image/bmp': ['.bmp'],
+      'image/svg+xml': ['.svg'],
+      'image/webp': ['.webp'],
+      'video/mp4': ['.mp4'],
+      'video/webm': ['.webm'],
+      'video/ogg': ['.ogg'],
+      'audio/mpeg': ['.mp3'],
+      'audio/wav': ['.wav'],
+      'audio/mp4': ['.m4a'],
+      
+      // Archive Formats
+      'application/zip': ['.zip'],
+      'application/x-gzip': ['.tar.gz'],
+    },
     maxSize: 100 * 1024 * 1024, // 100MB
     multiple: true,
   });
@@ -382,7 +414,7 @@ const DataUploadComponent: React.FC<DataUploadComponentProps> = ({ onUploadCompl
               📁 Uploading to: {currentContext.name} ({currentContext.type})
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Supported formats: FASTQ, FASTA, BAM/SAM, VCF, CSV/TSV, Excel, BED, GTF/GFF, JSON, XML, ZIP, TXT
+              Supported formats: Omics (FASTQ, FASTA, BAM/SAM, VCF, BED, GTF/GFF), Data (CSV/TSV, Excel, JSON, XML), Documents (PDF, Word, PowerPoint), Media (Images, Videos, Audio), Archives (ZIP, TAR)
             </Typography>
             <Typography variant="caption" display="block" color="text.secondary">
               Maximum file size: 100MB per file

@@ -1981,9 +1981,16 @@ public class UserController {
                     System.out.println("Found " + labMemberships.size() + " lab memberships");
                     for (UserLabMembershipDto membership : labMemberships) {
                         System.out.println("Membership: " + membership);
-                        System.out.println("Comparing labId: " + labId + " with membership.getLabId(): " + membership.getLabId());
+                        System.out.println("Comparing labId: " + labId + " (type: " + labId.getClass().getSimpleName() + ") with membership.getLabId(): " + membership.getLabId() + " (type: " + (membership.getLabId() != null ? membership.getLabId().getClass().getSimpleName() : "null") + ")");
                         System.out.println("Comparing role: 'Lab PI' with membership.getRoleInLab(): '" + membership.getRoleInLab() + "'");
-                        if ("Lab PI".equals(membership.getRoleInLab()) && labId.equals(membership.getLabId())) {
+                        
+                        // More robust comparison with null checks
+                        boolean roleMatches = "Lab PI".equals(membership.getRoleInLab());
+                        boolean labIdMatches = labId != null && membership.getLabId() != null && labId.equals(membership.getLabId());
+                        
+                        System.out.println("Role matches: " + roleMatches + ", Lab ID matches: " + labIdMatches);
+                        
+                        if (roleMatches && labIdMatches) {
                             canDelete = true;
                             reason = "User is Lab PI for this lab";
                             System.out.println("User is Lab PI for this lab");
@@ -1999,9 +2006,16 @@ public class UserController {
                     System.out.println("Found " + teamMemberships.size() + " team memberships");
                     for (UserTeamMembershipDto membership : teamMemberships) {
                         System.out.println("Membership: " + membership);
-                        System.out.println("Comparing teamId: " + teamId + " with membership.getTeamId(): " + membership.getTeamId());
+                        System.out.println("Comparing teamId: " + teamId + " (type: " + teamId.getClass().getSimpleName() + ") with membership.getTeamId(): " + membership.getTeamId() + " (type: " + (membership.getTeamId() != null ? membership.getTeamId().getClass().getSimpleName() : "null") + ")");
                         System.out.println("Comparing role: 'Team Leader' with membership.getRoleInTeam(): '" + membership.getRoleInTeam() + "'");
-                        if ("Team Leader".equals(membership.getRoleInTeam()) && teamId.equals(membership.getTeamId())) {
+                        
+                        // More robust comparison with null checks
+                        boolean roleMatches = "Team Leader".equals(membership.getRoleInTeam());
+                        boolean teamIdMatches = teamId != null && membership.getTeamId() != null && teamId.equals(membership.getTeamId());
+                        
+                        System.out.println("Role matches: " + roleMatches + ", Team ID matches: " + teamIdMatches);
+                        
+                        if (roleMatches && teamIdMatches) {
                             canDelete = true;
                             reason = "User is Team Leader for this team";
                             System.out.println("User is Team Leader for this team");

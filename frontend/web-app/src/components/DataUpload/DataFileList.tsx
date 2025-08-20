@@ -41,6 +41,8 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
+import FileViewer from './FileViewer';
+
 
 interface DataFile {
   id: number;
@@ -96,6 +98,14 @@ const DataFileList: React.FC<DataFileListProps> = ({ refreshTrigger = 0 }) => {
     open: false,
     file: null,
   });
+  const [viewerDialog, setViewerDialog] = useState<{
+    open: boolean;
+    file: DataFile | null;
+  }>({
+    open: false,
+    file: null,
+  });
+
 
   const { username } = useAuth();
 
@@ -209,6 +219,59 @@ const DataFileList: React.FC<DataFileListProps> = ({ refreshTrigger = 0 }) => {
       });
     }
   };
+
+  const handleDownload = async (fileId: number) => {
+    try {
+      const token = localStorage.getItem('jwtToken');
+      const response = await fetch(`http://localhost:12001/api/data/files/${fileId}/download`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = response.headers.get('content-disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        setSnackbar({
+          open: true,
+          message: 'File downloaded successfully',
+          severity: 'success',
+        });
+      } else {
+        const errorData = await response.json();
+        setSnackbar({
+          open: true,
+          message: 'Failed to download file: ' + (errorData.error || 'Unknown error'),
+          severity: 'error',
+        });
+      }
+    } catch (error: any) {
+      console.error('Error downloading file:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error downloading file. Please try again.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleView = (file: DataFile) => {
+    setViewerDialog({ open: true, file });
+  };
+
+  const closeViewer = () => {
+    setViewerDialog({ open: false, file: null });
+  };
+
+
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -429,9 +492,14 @@ const DataFileList: React.FC<DataFileListProps> = ({ refreshTrigger = 0 }) => {
                       size="small"
                       sx={{ textTransform: 'capitalize' }}
                     />
-                    <Tooltip title="View Details">
-                      <IconButton size="small">
+                    <Tooltip title="View Online">
+                      <IconButton size="small" onClick={() => handleView(file)}>
                         <Visibility />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Download">
+                      <IconButton size="small" onClick={() => handleDownload(file.id)}>
+                        <Download />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Edit">
@@ -562,6 +630,15 @@ const DataFileList: React.FC<DataFileListProps> = ({ refreshTrigger = 0 }) => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* File Viewer Dialog */}
+      <FileViewer
+        open={viewerDialog.open}
+        onClose={closeViewer}
+        file={viewerDialog.file}
+        onDownload={handleDownload}
+      />
+
     </Box>
   );
 };

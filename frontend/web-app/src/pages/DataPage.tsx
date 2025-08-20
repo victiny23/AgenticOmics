@@ -61,17 +61,36 @@ const DataPage: React.FC = () => {
   const [fileListRefreshTrigger, setFileListRefreshTrigger] = useState(0);
 
   const supportedFormats = [
-    'FASTQ (.fastq, .fq)',
-    'FASTA (.fasta, .fa)',
-    'BAM/SAM (.bam, .sam)',
-    'VCF (.vcf)',
-    'CSV/TSV (.csv, .tsv)',
-    'Excel (.xlsx, .xls)',
-    'BED (.bed)',
-    'GTF/GFF (.gtf, .gff)',
-    'JSON (.json)',
-    'XML (.xml)',
-    'ZIP (.zip, .tar.gz)',
+    // Omics Data Formats
+    'FASTQ (.fastq, .fq) - Sequencing reads',
+    'FASTA (.fasta, .fa) - Sequence data',
+    'BAM/SAM (.bam, .sam) - Alignment files',
+    'VCF (.vcf) - Variant call format',
+    'BED (.bed) - Genomic intervals',
+    'GTF/GFF (.gtf, .gff) - Gene annotations',
+    
+    // Data & Analysis Formats
+    'CSV/TSV (.csv, .tsv) - Tabular data',
+    'Excel (.xlsx, .xls) - Spreadsheets',
+    'JSON (.json) - Structured data',
+    'XML (.xml) - Markup data',
+    
+    // Document Formats
+    'PDF (.pdf) - Documents & reports',
+    'Word (.doc, .docx) - Documents',
+    'PowerPoint (.ppt, .pptx) - Presentations',
+    'Text (.txt, .md) - Plain text files',
+    'HTML (.html, .htm) - Web pages',
+    'CSS (.css) - Stylesheets',
+    'JavaScript (.js) - Scripts',
+    
+    // Media Formats
+    'Images (.jpg, .jpeg, .png, .gif, .bmp, .svg, .webp)',
+    'Videos (.mp4, .webm, .ogg)',
+    'Audio (.mp3, .wav, .m4a)',
+    
+    // Archive Formats
+    'ZIP (.zip, .tar.gz) - Compressed files',
   ];
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
