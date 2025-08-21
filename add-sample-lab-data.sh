@@ -1,106 +1,60 @@
 #!/bin/bash
 
-echo "🔬 Adding Sample Lab Data"
-echo "========================"
+echo "🔧 Adding sample lab and team data..."
 
-# Get admin token
-echo "1. Getting admin token..."
-ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
-ADMIN_RESPONSE=$(curl -s -X POST "http://localhost:8081/login" -H "Content-Type: application/json" -d "{\"username\":\"$ADMIN_USERNAME\",\"password\":\"$ADMIN_PASSWORD\"}")
-ADMIN_TOKEN=$(echo "$ADMIN_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+# Wait for services to be ready
+sleep 5
 
-if [ -z "$ADMIN_TOKEN" ]; then
-    echo "❌ Failed to get admin token"
+# Test if services are running
+echo "Testing if services are running..."
+curl -s http://localhost:12001/api/auth/public/users/basic > /dev/null
+if [ $? -ne 0 ]; then
+    echo "❌ Services are not running. Please start the application first."
     exit 1
 fi
 
-echo "✅ Admin token obtained"
+echo "✅ Services are running"
 
-# Create sample lab with auto-increment
-echo "2. Creating sample lab with auto-increment..."
-LAB_RESPONSE=$(curl -s -X POST "http://localhost:12001/api/auth/admin/labs/auto-id" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "X-Username: admin" \
+# First, let's check what users we have
+echo "Current users:"
+curl -s -X GET "http://localhost:12001/api/auth/public/users/basic" | jq '.[].username' 2>/dev/null || curl -s -X GET "http://localhost:12001/api/auth/public/users/basic"
+
+echo ""
+echo "Creating labs using admin user..."
+
+# Try to create labs using the admin user
+echo "Creating LAB001..."
+RESPONSE1=$(curl -s -X POST "http://localhost:12001/api/auth/admin/labs" \
   -H "Content-Type: application/json" \
+  -H "X-Username: admin" \
   -d '{
-    "labName": "Gabriel Lab",
-    "labDescription": "Research lab focused on genomics and bioinformatics",
+    "labId": "LAB001",
+    "labName": "Genomics Research Lab",
+    "labDescription": "Advanced genomics and bioinformatics research",
     "institution": "University of Science",
-    "department": "Biology"
+    "department": "Biology Department"
   }')
-
-echo "Lab creation response: $LAB_RESPONSE"
-
-# Get demo token
-echo "3. Getting demo user token..."
-DEMO_USERNAME=${DEMO_USERNAME:-demo}
-DEMO_PASSWORD=${DEMO_PASSWORD:-demo}
-DEMO_RESPONSE=$(curl -s -X POST "http://localhost:8081/login" -H "Content-Type: application/json" -d "{\"username\":\"$DEMO_USERNAME\",\"password\":\"$DEMO_PASSWORD\"}")
-DEMO_TOKEN=$(echo "$DEMO_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-
-if [ -z "$DEMO_TOKEN" ]; then
-    echo "❌ Failed to get demo token"
-    exit 1
-fi
-
-echo "✅ Demo token obtained"
-
-# Add demo user to lab
-echo "4. Adding demo user to lab..."
-MEMBERSHIP_RESPONSE=$(curl -s -X POST "http://localhost:12001/api/auth/admin/lab-memberships" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "X-Username: admin" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "demo",
-    "labName": "Gabriel Lab",
-    "roleInLab": "PhD Student",
-    "memberId": "DEMO001",
-    "supervisorUsername": "admin",
-    "isPrimaryLab": true
-  }')
-
-echo "Membership response: $MEMBERSHIP_RESPONSE"
-
-# Add admin to lab
-echo "5. Adding admin to lab..."
-ADMIN_MEMBERSHIP_RESPONSE=$(curl -s -X POST "http://localhost:12001/api/auth/admin/lab-memberships" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "X-Username: admin" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "labName": "Gabriel Lab",
-    "roleInLab": "Lab PI",
-    "memberId": "ADMIN001",
-    "supervisorUsername": null,
-    "isPrimaryLab": true
-  }')
-
-echo "Admin membership response: $ADMIN_MEMBERSHIP_RESPONSE"
-
-# Test the lab memberships
-echo "6. Testing lab memberships..."
-echo "Admin profile:"
-curl -s "http://localhost:12001/api/auth/profile" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "X-Username: admin" | grep -o '"labMemberships":\[[^]]*\]' || echo "No lab memberships found"
-
-echo "Demo profile:"
-curl -s "http://localhost:12001/api/auth/profile" \
-  -H "Authorization: Bearer $DEMO_TOKEN" \
-  -H "X-Username: demo" | grep -o '"labMemberships":\[[^]]*\]' || echo "No lab memberships found"
+echo "Response: $RESPONSE1"
 
 echo ""
-echo "🎉 Sample lab data added!"
-echo "========================="
-echo "✅ Created Gabriel Lab"
-echo "✅ Added admin as Lab PI"
-echo "✅ Added demo as PhD Student"
+echo "Creating LAB002..."
+RESPONSE2=$(curl -s -X POST "http://localhost:12001/api/auth/admin/labs" \
+  -H "Content-Type: application/json" \
+  -H "X-Username: admin" \
+  -d '{
+    "labId": "LAB002",
+    "labName": "Data Science Lab",
+    "labDescription": "Machine learning and data analysis research",
+    "institution": "University of Technology",
+    "department": "Computer Science Department"
+  }')
+echo "Response: $RESPONSE2"
+
 echo ""
-echo "📱 Test the lab/team context selector:"
-echo "1. Go to http://localhost:12000"
-echo "2. Log in with your credentials (use environment variables ADMIN_USERNAME/ADMIN_PASSWORD)"
-echo "3. Navigate to Data Upload or Data Management"
-echo "4. You should see 'Gabriel Lab (LAB001)' in the context selector" 
+echo "Testing if labs were created..."
+curl -s -X GET "http://localhost:12001/api/auth/labs" -H "X-Username: admin"
+
+echo ""
+echo "✅ Sample lab data added!"
+echo ""
+echo "You can now test the invitation feature in the frontend." 

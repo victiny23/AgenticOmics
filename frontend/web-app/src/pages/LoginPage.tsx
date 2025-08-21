@@ -104,7 +104,7 @@ const LoginPage: React.FC = () => {
   const loadAvailableLabs = async () => {
     try {
       setIsLoadingLabs(true);
-      const response = await axios.get('http://localhost:12001/api/auth/public/labs');
+      const response = await axios.get('/api/auth/public/labs');
       setAvailableLabs(response.data || []);
     } catch (error) {
       console.log('Could not load labs, will allow manual entry');
@@ -117,7 +117,7 @@ const LoginPage: React.FC = () => {
   const loadAvailableTeams = async () => {
     try {
       setIsLoadingTeams(true);
-      const response = await axios.get('http://localhost:12001/api/auth/public/teams');
+      const response = await axios.get('/api/auth/public/teams');
       setAvailableTeams(response.data || []);
     } catch (error) {
       console.log('Could not load teams, will allow manual entry');
@@ -130,7 +130,7 @@ const LoginPage: React.FC = () => {
   const loadAvailableSupervisors = async (labId: number) => {
     try {
       setIsLoadingSupervisors(true);
-      const response = await axios.get(`http://localhost:12001/api/auth/public/labs/${labId}/supervisors`);
+      const response = await axios.get(`/api/auth/public/labs/${labId}/supervisors`);
       setAvailableSupervisors(response.data || []);
     } catch (error) {
       console.log('Could not load supervisors for this lab');
@@ -155,7 +155,7 @@ const LoginPage: React.FC = () => {
         ...(loginMethod === 'username' ? { username } : { telephone })
       };
       
-      const response = await axios.post('http://localhost:12001/api/auth/login', loginData);
+      const response = await axios.post('/api/auth/login', loginData);
 
       // Use auth context to login with user status
       const isActive = response.data.isActive !== false; // Default to true if not provided
@@ -250,7 +250,7 @@ const LoginPage: React.FC = () => {
         registerData.supervisorUsername = supervisorUsername.trim();
       }
       
-      await axios.post('http://localhost:12001/api/auth/register', registerData);
+      await axios.post('/api/auth/register', registerData);
       setSuccess('Registration successful! You can now log in.');
       setIsRegister(false);
       setUsername('');
@@ -295,7 +295,7 @@ const LoginPage: React.FC = () => {
     setError('');
     setSuccess('');
     try {
-      const response = await axios.post('http://localhost:12001/api/auth/forgot-password', { email });
+      const response = await axios.post('/api/auth/forgot-password', { email });
       const resp = response.data;
       if (typeof resp === 'string' && resp.includes('Token:')) {
         const match = resp.match(/Token:\s*([A-Za-z0-9\-]+)/);
@@ -333,7 +333,7 @@ const LoginPage: React.FC = () => {
       return;
     }
     try {
-      await axios.post('http://localhost:12001/api/auth/reset-password', {
+              await axios.post('/api/auth/reset-password', {
         resetToken,
         newPassword,
       });

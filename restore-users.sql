@@ -1,5 +1,5 @@
--- Restore Users Script - Restoring Jerry, Mian, Gabriel, and Admin
--- This script restores all the users that were accidentally deleted
+-- Restore Users Script
+-- This script restores Jerry, Mian, Gabriel, and Admin users
 
 -- Create Jerry user
 INSERT INTO USERS (USERNAME, PASSWORD, EMAIL, ROLE, IS_ACTIVE, CREATED_AT, UPDATED_AT) 
@@ -13,7 +13,7 @@ VALUES ('Mian', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDa', 
 INSERT INTO USERS (USERNAME, PASSWORD, EMAIL, ROLE, IS_ACTIVE, CREATED_AT, UPDATED_AT) 
 VALUES ('Gabriel', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDa', '123456@qq.com', 'Master Student', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- Create Admin user
+-- Create Admin user (if not exists)
 INSERT INTO USERS (USERNAME, PASSWORD, EMAIL, ROLE, IS_ACTIVE, CREATED_AT, UPDATED_AT) 
 VALUES ('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDa', 'admin@agenticomics.com', 'Super Admin', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
@@ -87,4 +87,4 @@ SELECT
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP; 
+    CURRENT_TIMESTAMP;

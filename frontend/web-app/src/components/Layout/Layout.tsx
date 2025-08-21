@@ -30,6 +30,7 @@ import {
   Settings,
   Logout,
   NotificationsActive,
+  Group as GroupIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -82,6 +83,12 @@ const navigationItems: NavigationItem[] = [
     icon: <ResultIcon />,
     path: '/result',
     description: 'View and export analysis results',
+  },
+  {
+    text: 'Membership',
+    icon: <GroupIcon />,
+    path: '/membership',
+    description: 'Manage lab and team memberships, requests, and invitations',
   },
 ]
 

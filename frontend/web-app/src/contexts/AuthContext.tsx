@@ -6,6 +6,7 @@ interface AuthContextType {
   role: string | null;
   isActive: boolean;
   photoUrl: string | null;
+  token: string | null;
   login: (token: string, username: string, role: string, isActive?: boolean) => void;
   logout: () => void;
   checkUserStatus: () => Promise<boolean>;
@@ -34,21 +35,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [role, setRole] = useState<string | null>(null);
   const [isActive, setIsActive] = useState<boolean>(true);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   // Check for existing authentication on app load
   useEffect(() => {
-    const token = localStorage.getItem('jwtToken');
+    const storedToken = localStorage.getItem('jwtToken');
     const storedUsername = localStorage.getItem('username');
     const storedRole = localStorage.getItem('role');
     const storedIsActive = localStorage.getItem('isActive');
     const storedPhotoUrl = localStorage.getItem('photoUrl');
 
-    if (token && storedUsername) {
+    if (storedToken && storedUsername) {
       setIsAuthenticated(true);
       setUsername(storedUsername);
       setRole(storedRole);
       setIsActive(storedIsActive !== 'false');
       setPhotoUrl(storedPhotoUrl);
+      setToken(storedToken);
     }
   }, []);
 
@@ -87,6 +90,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUsername(username);
     setRole(role);
     setIsActive(isActive);
+    setToken(token);
   };
 
   const logout = () => {
@@ -98,6 +102,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsAuthenticated(false);
     setUsername(null);
     setRole(null);
+    setToken(null);
     setIsActive(true);
     setPhotoUrl(null);
     window.dispatchEvent(new CustomEvent('logout'));
@@ -120,7 +125,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       // Use the regular profile endpoint instead of admin endpoint
-      const response = await fetch(`http://localhost:12001/api/auth/profile`, {
+      const response = await fetch(`/api/auth/profile`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -165,7 +170,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!filename) return null;
     
     // Return the secure endpoint URL
-    return `http://localhost:12001/api/auth/profile/photo/${filename}`;
+    return `/api/auth/profile/photo/${filename}`;
   };
 
   const refreshProfile = async () => {
@@ -183,7 +188,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       
       // Get basic profile info (non-sensitive)
-      const res = await fetch('http://localhost:12001/api/auth/profile', {
+      const res = await fetch('/api/auth/profile', {
         headers: { Authorization: `Bearer ${token}`, 'X-Username': currentUsername }
       });
       if (res.ok) {
@@ -196,7 +201,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       
       // Get sensitive profile info (including photo URL)
-      const sensitiveRes = await fetch('http://localhost:12001/api/auth/profile/sensitive', {
+              const sensitiveRes = await fetch('/api/auth/profile/sensitive', {
         headers: { Authorization: `Bearer ${token}`, 'X-Username': currentUsername }
       });
       if (sensitiveRes.ok) {
@@ -224,6 +229,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     role,
     isActive,
     photoUrl,
+    token,
     login,
     logout,
     checkUserStatus,

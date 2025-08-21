@@ -19,6 +19,7 @@ import ActivationRequestsPage from './pages/ActivationRequestsPage'
 import UserManagementPage from './pages/UserManagementPage'
 import SystemAdministrationPage from './pages/SystemAdministrationPage'
 import SettingsPage from './pages/SettingsPage'
+import MembershipManagementPage from './pages/MembershipManagementPage'
 
 function App() {
   return (
@@ -68,6 +69,13 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <SettingsPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/membership" element={
+            <ProtectedRoute>
+              <Layout>
+                <MembershipManagementPage />
               </Layout>
             </ProtectedRoute>
           } />

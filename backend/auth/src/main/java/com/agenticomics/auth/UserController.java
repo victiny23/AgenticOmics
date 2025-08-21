@@ -39,10 +39,24 @@ import com.agenticomics.auth.service.LabApplicationService;
 import com.agenticomics.auth.service.TeamApplicationService;
 import com.agenticomics.auth.service.ActivationRequestService;
 import com.agenticomics.auth.entity.ActivationRequest;
+import com.agenticomics.auth.service.MembershipRequestService;
+import com.agenticomics.auth.service.InvitationService;
+import com.agenticomics.auth.dto.LabMembershipRequestDto;
+import com.agenticomics.auth.dto.TeamMembershipRequestDto;
+import com.agenticomics.auth.dto.LabInvitationDto;
+import com.agenticomics.auth.dto.TeamInvitationDto;
+import com.agenticomics.auth.entity.LabMembershipRequest;
+import com.agenticomics.auth.entity.TeamMembershipRequest;
+import com.agenticomics.auth.entity.LabInvitation;
+import com.agenticomics.auth.entity.TeamInvitation;
 import java.util.ArrayList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 public class UserController {
+
+    private static final Logger log = LoggerFactory.getLogger(UserController.class);
 
     @Autowired
     private UserService userService;
@@ -82,6 +96,12 @@ public class UserController {
     
     @Autowired
     private ActivationRequestService activationRequestService;
+    
+    @Autowired
+    private MembershipRequestService membershipRequestService;
+    
+    @Autowired
+    private InvitationService invitationService;
     
     @Value("${app.upload-dir:./data/uploads/profile-photos}")
     private String uploadDir;
@@ -283,6 +303,66 @@ public class UserController {
             return ResponseEntity.ok(usersWithOrganizations);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Public endpoint to get basic user information for membership management
+     */
+    @GetMapping("/public/users/basic")
+    public ResponseEntity<?> getBasicUserInfo() {
+        try {
+            List<Map<String, Object>> basicUserInfo = userService.getBasicUserInfo();
+            return ResponseEntity.ok(basicUserInfo);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Temporary endpoint to fix Jerry's lab membership
+     */
+    @PostMapping("/admin/fix-jerry-lab-membership")
+    public ResponseEntity<?> fixJerryLabMembership() {
+        try {
+            // Find Jerry
+            Optional<User> jerryOpt = userService.findByUsername("Jerry");
+            if (jerryOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User 'Jerry' not found.");
+            }
+            User jerry = jerryOpt.get();
+
+            // Find LAB001
+            Optional<Lab> lab001Opt = labRepository.findByLabName("LAB001");
+            if (lab001Opt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Lab 'LAB001' not found.");
+            }
+            Lab lab001 = lab001Opt.get();
+
+            // Check if Jerry is already a member of LAB001
+            Optional<UserLabMembership> existingMembership = userLabMembershipRepository
+                .findByUserIdAndLabIdAndIsActiveTrue(jerry.getId(), lab001.getId());
+            
+            if (existingMembership.isPresent()) {
+                return ResponseEntity.ok("Jerry is already a member of LAB001 with role: " + existingMembership.get().getRoleInLab());
+            }
+
+            // Add Jerry as Lab PI to LAB001
+            UserLabMembership membership = new UserLabMembership();
+            membership.setUser(jerry);
+            membership.setLab(lab001);
+            membership.setRoleInLab("Lab PI");
+            membership.setIsActive(true);
+            membership.setIsPrimaryLab(true);
+            membership.setJoinedAt(LocalDateTime.now());
+            membership.setMemberId("LAB001");
+            
+            userLabMembershipRepository.save(membership);
+
+            return ResponseEntity.ok("Jerry successfully added as Lab PI to LAB001");
+        } catch (Exception e) {
+            log.error("Error fixing Jerry's lab membership: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to fix Jerry's lab membership: " + e.getMessage());
         }
     }
     
@@ -1442,6 +1522,17 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get labs: " + e.getMessage());
         }
     }
+
+    @GetMapping("/labs")
+    public ResponseEntity<?> getLabs(@RequestHeader("X-Username") String username) {
+        try {
+            // Authenticated endpoint for getting labs
+            List<LabDto> labs = labService.getAllLabs();
+            return ResponseEntity.ok(labs);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get labs: " + e.getMessage());
+        }
+    }
     
     @GetMapping("/public/teams")
     public ResponseEntity<?> getPublicTeams() {
@@ -1453,13 +1544,61 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get teams: " + e.getMessage());
         }
     }
+
+    @GetMapping("/teams")
+    public ResponseEntity<?> getTeams(@RequestHeader("X-Username") String username) {
+        try {
+            // Authenticated endpoint for getting teams
+            List<TeamDto> teams = teamService.getAllTeams();
+            return ResponseEntity.ok(teams);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to get teams: " + e.getMessage());
+        }
+    }
+    
+    @GetMapping("/my-labs")
+    public ResponseEntity<?> getMyLabs(@RequestHeader("X-Username") String username) {
+        try {
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            User user = userOpt.get();
+            List<Lab> userLabs = labService.getLabsByUser(user.getId());
+            return ResponseEntity.ok(userLabs);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving user labs: " + e.getMessage());
+        }
+    }
+    
+    @GetMapping("/my-teams")
+    public ResponseEntity<?> getMyTeams(@RequestHeader("X-Username") String username) {
+        try {
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            User user = userOpt.get();
+            List<Team> userTeams = teamService.getTeamsByUser(user.getId());
+            return ResponseEntity.ok(userTeams);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving user teams: " + e.getMessage());
+        }
+    }
     
     @PostMapping("/admin/labs")
     public ResponseEntity<?> createLab(@RequestBody CreateLabRequest request, @RequestHeader("X-Username") String adminUsername) {
         try {
-            // Only Lab PIs can create labs
-            if (!userService.isUserPI(adminUsername)) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PI users can create labs");
+            // Only Lab PIs and Super Admins can create labs
+            Optional<User> userOpt = userService.findByUsername(adminUsername);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            User user = userOpt.get();
+            if (!userService.isUserPI(adminUsername) && !"Super Admin".equals(user.getRole())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PI users and Super Admins can create labs");
             }
             Lab lab = labService.createLab(
                 request.getLabId(),
@@ -2729,6 +2868,558 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error rejecting activation request: " + e.getMessage());
+        }
+    }
+    
+    // ========================================
+    // LAB MEMBERSHIP REQUEST ENDPOINTS
+    // ========================================
+    
+    /**
+     * Apply to join a lab
+     */
+    @PostMapping("/lab-membership-requests")
+    public ResponseEntity<?> createLabMembershipRequest(@RequestBody Map<String, Object> request, @RequestHeader("X-Username") String username) {
+        try {
+            Long labId = Long.valueOf(request.get("labId").toString());
+            String requestedRole = (String) request.get("requestedRole");
+            String requestMessage = (String) request.get("requestMessage");
+            
+            if (labId == null || requestedRole == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("labId and requestedRole are required");
+            }
+            
+            LabMembershipRequestDto result = membershipRequestService.createLabMembershipRequest(username, labId, requestedRole, requestMessage);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error creating lab membership request: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Review a lab membership request (Lab PI only)
+     */
+    @PostMapping("/lab-membership-requests/{requestId}/review")
+    public ResponseEntity<?> reviewLabMembershipRequest(@PathVariable Long requestId, @RequestBody Map<String, Object> request, @RequestHeader("X-Username") String username) {
+        try {
+            String status = (String) request.get("status");
+            String reviewMessage = (String) request.get("reviewMessage");
+            
+            if (status == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("status is required");
+            }
+            
+            LabMembershipRequest.RequestStatus requestStatus = LabMembershipRequest.RequestStatus.valueOf(status.toUpperCase());
+            LabMembershipRequestDto result = membershipRequestService.reviewLabMembershipRequest(requestId, username, requestStatus, reviewMessage);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error reviewing lab membership request: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get lab membership requests for a user
+     */
+    @GetMapping("/lab-membership-requests/my-requests")
+    public ResponseEntity<?> getMyLabMembershipRequests(@RequestHeader("X-Username") String username) {
+        try {
+            List<LabMembershipRequestDto> requests = membershipRequestService.getLabMembershipRequestsByUser(username);
+            return ResponseEntity.ok(requests);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving lab membership requests: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get pending lab membership requests for a lab (Lab PI only)
+     */
+    @GetMapping("/lab-membership-requests/lab/{labId}/pending")
+    public ResponseEntity<?> getPendingLabMembershipRequests(@PathVariable Long labId, @RequestHeader("X-Username") String username) {
+        try {
+            // Check if user is Lab PI of this lab
+            if (!labService.isUserLabPI(userRepository.findByUsername(username).get().getId(), labId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Only Lab PI can view pending requests");
+            }
+            
+            List<LabMembershipRequestDto> requests = membershipRequestService.getPendingLabMembershipRequestsByLab(labId);
+            return ResponseEntity.ok(requests);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving pending lab membership requests: " + e.getMessage());
+        }
+    }
+    
+    // ========================================
+    // TEAM MEMBERSHIP REQUEST ENDPOINTS
+    // ========================================
+    
+    /**
+     * Apply to join a team
+     */
+    @PostMapping("/team-membership-requests")
+    public ResponseEntity<?> createTeamMembershipRequest(@RequestBody Map<String, Object> request, @RequestHeader("X-Username") String username) {
+        try {
+            Long teamId = Long.valueOf(request.get("teamId").toString());
+            String requestedRole = (String) request.get("requestedRole");
+            String requestMessage = (String) request.get("requestMessage");
+            
+            if (teamId == null || requestedRole == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("teamId and requestedRole are required");
+            }
+            
+            TeamMembershipRequestDto result = membershipRequestService.createTeamMembershipRequest(username, teamId, requestedRole, requestMessage);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error creating team membership request: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Review a team membership request (Team Leader only)
+     */
+    @PostMapping("/team-membership-requests/{requestId}/review")
+    public ResponseEntity<?> reviewTeamMembershipRequest(@PathVariable Long requestId, @RequestBody Map<String, Object> request, @RequestHeader("X-Username") String username) {
+        try {
+            String status = (String) request.get("status");
+            String reviewMessage = (String) request.get("reviewMessage");
+            
+            if (status == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("status is required");
+            }
+            
+            TeamMembershipRequest.RequestStatus requestStatus = TeamMembershipRequest.RequestStatus.valueOf(status.toUpperCase());
+            TeamMembershipRequestDto result = membershipRequestService.reviewTeamMembershipRequest(requestId, username, requestStatus, reviewMessage);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error reviewing team membership request: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get team membership requests for a user
+     */
+    @GetMapping("/team-membership-requests/my-requests")
+    public ResponseEntity<?> getMyTeamMembershipRequests(@RequestHeader("X-Username") String username) {
+        try {
+            List<TeamMembershipRequestDto> requests = membershipRequestService.getTeamMembershipRequestsByUser(username);
+            return ResponseEntity.ok(requests);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving team membership requests: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get pending team membership requests for a team (Team Leader only)
+     */
+    @GetMapping("/team-membership-requests/team/{teamId}/pending")
+    public ResponseEntity<?> getPendingTeamMembershipRequests(@PathVariable Long teamId, @RequestHeader("X-Username") String username) {
+        try {
+            // Check if user is Team Leader of this team
+            if (!teamService.isUserTeamLeader(userRepository.findByUsername(username).get().getId(), teamId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: Only Team Leader can view pending requests");
+            }
+            
+            List<TeamMembershipRequestDto> requests = membershipRequestService.getPendingTeamMembershipRequestsByTeam(teamId);
+            return ResponseEntity.ok(requests);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving pending team membership requests: " + e.getMessage());
+        }
+    }
+    
+    // ========================================
+    // LAB INVITATION ENDPOINTS
+    // ========================================
+    
+    /**
+     * Invite a user to join a lab (Lab PI only)
+     */
+    @PostMapping("/lab-invitations")
+    public ResponseEntity<?> createLabInvitation(@RequestBody Map<String, Object> request, @RequestHeader("X-Username") String username) {
+        try {
+            String invitedUsername = (String) request.get("invitedUsername");
+            Long labId = Long.valueOf(request.get("labId").toString());
+            String invitedRole = (String) request.get("invitedRole");
+            String invitationMessage = (String) request.get("invitationMessage");
+            
+            if (invitedUsername == null || labId == null || invitedRole == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("invitedUsername, labId, and invitedRole are required");
+            }
+            
+            LabInvitationDto result = invitationService.createLabInvitation(invitedUsername, labId, invitedRole, invitationMessage, username);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error creating lab invitation: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Respond to a lab invitation
+     */
+    @PostMapping("/lab-invitations/{invitationId}/respond")
+    public ResponseEntity<?> respondToLabInvitation(@PathVariable Long invitationId, @RequestBody Map<String, Object> request, @RequestHeader("X-Username") String username) {
+        try {
+            String response = (String) request.get("response");
+            
+            if (response == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("response is required");
+            }
+            
+            LabInvitation.InvitationStatus invitationStatus = LabInvitation.InvitationStatus.valueOf(response.toUpperCase());
+            LabInvitationDto result = invitationService.respondToLabInvitation(invitationId, username, invitationStatus);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error responding to lab invitation: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get lab invitations for a user
+     */
+    @GetMapping("/lab-invitations/my-invitations")
+    public ResponseEntity<?> getMyLabInvitations(@RequestHeader("X-Username") String username) {
+        try {
+            List<LabInvitationDto> invitations = invitationService.getLabInvitationsByUser(username);
+            return ResponseEntity.ok(invitations);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving lab invitations: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get pending lab invitations for a user
+     */
+    @GetMapping("/lab-invitations/my-invitations/pending")
+    public ResponseEntity<?> getMyPendingLabInvitations(@RequestHeader("X-Username") String username) {
+        try {
+            List<LabInvitationDto> invitations = invitationService.getPendingLabInvitationsByUser(username);
+            return ResponseEntity.ok(invitations);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving pending lab invitations: " + e.getMessage());
+        }
+    }
+    
+    // ========================================
+    // TEAM INVITATION ENDPOINTS
+    // ========================================
+    
+    /**
+     * Invite a user to join a team (Team Leader only)
+     */
+    @PostMapping("/team-invitations")
+    public ResponseEntity<?> createTeamInvitation(@RequestBody Map<String, Object> request, @RequestHeader("X-Username") String username) {
+        try {
+            String invitedUsername = (String) request.get("invitedUsername");
+            Long teamId = Long.valueOf(request.get("teamId").toString());
+            String invitedRole = (String) request.get("invitedRole");
+            String invitationMessage = (String) request.get("invitationMessage");
+            
+            if (invitedUsername == null || teamId == null || invitedRole == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("invitedUsername, teamId, and invitedRole are required");
+            }
+            
+            TeamInvitationDto result = invitationService.createTeamInvitation(invitedUsername, teamId, invitedRole, invitationMessage, username);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error creating team invitation: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Respond to a team invitation
+     */
+    @PostMapping("/team-invitations/{invitationId}/respond")
+    public ResponseEntity<?> respondToTeamInvitation(@PathVariable Long invitationId, @RequestBody Map<String, Object> request, @RequestHeader("X-Username") String username) {
+        try {
+            String response = (String) request.get("response");
+            
+            if (response == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("response is required");
+            }
+            
+            TeamInvitation.InvitationStatus invitationStatus = TeamInvitation.InvitationStatus.valueOf(response.toUpperCase());
+            TeamInvitationDto result = invitationService.respondToTeamInvitation(invitationId, username, invitationStatus);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error responding to team invitation: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get team invitations for a user
+     */
+    @GetMapping("/team-invitations/my-invitations")
+    public ResponseEntity<?> getMyTeamInvitations(@RequestHeader("X-Username") String username) {
+        try {
+            List<TeamInvitationDto> invitations = invitationService.getTeamInvitationsByUser(username);
+            return ResponseEntity.ok(invitations);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving team invitations: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get pending team invitations for a user
+     */
+    @GetMapping("/team-invitations/my-invitations/pending")
+    public ResponseEntity<?> getMyPendingTeamInvitations(@RequestHeader("X-Username") String username) {
+        try {
+            List<TeamInvitationDto> invitations = invitationService.getPendingTeamInvitationsByUser(username);
+            return ResponseEntity.ok(invitations);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving pending team invitations: " + e.getMessage());
+        }
+    }
+    
+    // ========================================
+    // FIX JERRY'S ROLE AND LAB MEMBERSHIP
+    // ========================================
+    
+    /**
+     * Fix Jerry's role and lab membership to make him PI of LAB001
+     */
+    @PostMapping("/admin/fix-jerry-lab-pi")
+    public ResponseEntity<?> fixJerryLabPI(@RequestHeader("X-Username") String adminUsername) {
+        try {
+            // Only allow admin or Jerry to call this endpoint
+            if (!"admin".equals(adminUsername) && !"Jerry".equals(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only admin or Jerry can call this endpoint");
+            }
+            
+            // Get Jerry user
+            Optional<User> jerryOpt = userService.findByUsername("Jerry");
+            if (jerryOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Jerry user not found");
+            }
+            
+            // Get LAB001
+            Optional<Lab> lab001Opt = labRepository.findByLabId("LAB001");
+            if (lab001Opt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("LAB001 not found");
+            }
+            
+            User jerry = jerryOpt.get();
+            Lab lab001 = lab001Opt.get();
+            
+            // Update Jerry's role to Lab PI
+            jerry.setRole("Lab PI");
+            userRepository.save(jerry);
+            
+            // Check if Jerry is already a member of LAB001
+            Optional<UserLabMembership> existingMembership = userLabMembershipRepository
+                .findByUserIdAndLabIdAndIsActiveTrue(jerry.getId(), lab001.getId());
+            
+            if (existingMembership.isPresent()) {
+                // Update existing membership to Lab PI role
+                UserLabMembership membership = existingMembership.get();
+                membership.setRoleInLab("Lab PI");
+                userLabMembershipRepository.save(membership);
+                
+                Map<String, Object> response = new HashMap<>();
+                response.put("message", "Jerry's role has been updated to Lab PI in LAB001");
+                response.put("jerry_id", jerry.getId());
+                response.put("lab_id", lab001.getId());
+                return ResponseEntity.ok(response);
+            } else {
+                // Create new membership
+                UserLabMembership membership = new UserLabMembership();
+                membership.setUser(jerry);
+                membership.setLab(lab001);
+                membership.setRoleInLab("Lab PI");
+                membership.setMemberId("LAB001");
+                membership.setSupervisor(null); // PI has no supervisor
+                membership.setIsActive(true);
+                membership.setCreatedAt(LocalDateTime.now());
+                membership.setUpdatedAt(LocalDateTime.now());
+                userLabMembershipRepository.save(membership);
+                
+                Map<String, Object> response = new HashMap<>();
+                response.put("message", "Jerry has been added to LAB001 as Lab PI");
+                response.put("jerry_id", jerry.getId());
+                response.put("lab_id", lab001.getId());
+                return ResponseEntity.ok(response);
+            }
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to fix Jerry's role: " + e.getMessage());
+        }
+    }
+
+    // ========================================
+    
+    /**
+     * Temporary endpoint to reset Jerry's password
+     */
+    @PostMapping("/admin/reset-jerry-password")
+    public ResponseEntity<?> resetJerryPassword(@RequestHeader("X-Username") String adminUsername) {
+        try {
+            if (!"admin".equals(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only admin can reset Jerry's password");
+            }
+            
+            Optional<User> jerryOpt = userService.findByUsername("Jerry");
+            if (jerryOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Jerry not found");
+            }
+            
+            User jerry = jerryOpt.get();
+            // Use the existing resetPassword method to properly encode the password
+            userService.resetPasswordDirectly(jerry, "jerrypass");
+            userService.save(jerry);
+            
+            return ResponseEntity.ok("Jerry's password has been reset to 'jerrypass'. User ID: " + jerry.getId());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to reset Jerry's password: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Temporary endpoint to reset all user passwords
+     */
+    @PostMapping("/admin/reset-all-passwords")
+    public ResponseEntity<?> resetAllPasswords(@RequestHeader("X-Username") String adminUsername) {
+        try {
+            if (!"admin".equals(adminUsername)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only admin can reset passwords");
+            }
+            
+            // Reset Jerry's password
+            Optional<User> jerryOpt = userService.findByUsername("Jerry");
+            if (jerryOpt.isPresent()) {
+                User jerry = jerryOpt.get();
+                userService.resetPasswordDirectly(jerry, "jerrypass");
+                userService.save(jerry);
+            }
+            
+            // Reset Mian's password
+            Optional<User> mianOpt = userService.findByUsername("Mian");
+            if (mianOpt.isPresent()) {
+                User mian = mianOpt.get();
+                userService.resetPasswordDirectly(mian, "mianpass");
+                userService.save(mian);
+            }
+            
+            // Reset Gabriel's password
+            Optional<User> gabrielOpt = userService.findByUsername("Gabriel");
+            if (gabrielOpt.isPresent()) {
+                User gabriel = gabrielOpt.get();
+                userService.resetPasswordDirectly(gabriel, "gabrielpass");
+                userService.save(gabriel);
+            }
+            
+            // Reset Admin's password
+            Optional<User> adminOpt = userService.findByUsername("admin");
+            if (adminOpt.isPresent()) {
+                User admin = adminOpt.get();
+                userService.resetPasswordDirectly(admin, "adminpass");
+                userService.save(admin);
+            }
+            
+            return ResponseEntity.ok("All user passwords have been reset successfully!");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to reset passwords: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get pending lab invitations that need PI approval
+     */
+    @GetMapping("/lab-invitations/pending-approvals")
+    public ResponseEntity<?> getPendingLabApprovals(@RequestHeader("X-Username") String username) {
+        try {
+            // Check if user is Lab PI or Super Admin
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            User user = userOpt.get();
+            if (!"Lab PI".equals(user.getRole()) && !"Super Admin".equals(user.getRole())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PIs and Super Admins can view pending approvals");
+            }
+            
+            List<LabInvitationDto> pendingInvitations = invitationService.getPendingLabApprovalsForPI(username);
+            return ResponseEntity.ok(pendingInvitations);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving pending lab approvals: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get pending team invitations that need Team Leader approval
+     */
+    @GetMapping("/team-invitations/pending-approvals")
+    public ResponseEntity<?> getPendingTeamApprovals(@RequestHeader("X-Username") String username) {
+        try {
+            // Check if user is Team Leader or Super Admin
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            User user = userOpt.get();
+            if (!"Team Leader".equals(user.getRole()) && !"Super Admin".equals(user.getRole())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Team Leaders and Super Admins can view pending approvals");
+            }
+            
+            List<TeamInvitationDto> pendingInvitations = invitationService.getPendingTeamApprovalsForLeader(username);
+            return ResponseEntity.ok(pendingInvitations);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving pending team approvals: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Approve or reject a lab invitation (PI only)
+     */
+    @PostMapping("/lab-invitations/{invitationId}/approve")
+    public ResponseEntity<?> approveLabInvitation(@PathVariable Long invitationId, 
+                                                 @RequestBody Map<String, String> request,
+                                                 @RequestHeader("X-Username") String username) {
+        try {
+            String status = request.get("status");
+            if (status == null || (!"APPROVED".equals(status) && !"REJECTED".equals(status))) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid status. Must be 'APPROVED' or 'REJECTED'");
+            }
+            
+            LabInvitationDto result = invitationService.approveLabInvitation(invitationId, username, status);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Approve or reject a team invitation (Team Leader only)
+     */
+    @PostMapping("/team-invitations/{invitationId}/approve")
+    public ResponseEntity<?> approveTeamInvitation(@PathVariable Long invitationId, 
+                                                  @RequestBody Map<String, String> request,
+                                                  @RequestHeader("X-Username") String username) {
+        try {
+            String status = request.get("status");
+            if (status == null || (!"APPROVED".equals(status) && !"REJECTED".equals(status))) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid status. Must be 'APPROVED' or 'REJECTED'");
+            }
+            
+            TeamInvitationDto result = invitationService.approveTeamInvitation(invitationId, username, status);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
 }

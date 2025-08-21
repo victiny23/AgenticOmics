@@ -252,6 +252,18 @@ public class TeamService {
         return membership.isPresent();
     }
     
+    public boolean isUserTeamLeader(Long userId, Long teamId) {
+        Optional<UserTeamMembership> membership = userTeamMembershipRepository
+                .findByUserIdAndTeamIdAndIsActiveTrue(userId, teamId);
+        return membership.isPresent() && "Team Leader".equals(membership.get().getRoleInTeam());
+    }
+    
+    public List<Team> getTeamsByUser(Long userId) {
+        return userTeamMembershipRepository.findByUserIdAndIsActiveTrue(userId).stream()
+                .map(UserTeamMembership::getTeam)
+                .collect(Collectors.toList());
+    }
+    
     private TeamDto convertToDto(Team team) {
         return new TeamDto(
                 team.getId(),

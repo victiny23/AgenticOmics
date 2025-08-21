@@ -215,6 +215,10 @@ public class UserService {
         return false;
     }
     
+    public void resetPasswordDirectly(User user, String newPassword) {
+        user.setPassword(passwordEncoder.encode(newPassword));
+    }
+    
     public long getActiveUserCount() {
         return userRepository.countActiveUsers();
     }
@@ -1117,5 +1121,23 @@ public class UserService {
         } catch (Exception e) {
             throw new RuntimeException("Error deleting team: " + e.getMessage());
         }
+    }
+    
+    /**
+     * Get basic user information for membership management
+     */
+    public List<Map<String, Object>> getBasicUserInfo() {
+        List<User> users = userRepository.findAllActiveUsers();
+        List<Map<String, Object>> basicUserInfo = new ArrayList<>();
+        
+        for (User user : users) {
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("username", user.getUsername());
+            userInfo.put("email", user.getEmail());
+            userInfo.put("role", user.getRole());
+            basicUserInfo.add(userInfo);
+        }
+        
+        return basicUserInfo;
     }
 } 

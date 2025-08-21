@@ -261,18 +261,17 @@ public class DataFileController {
             String originalFilename = dataFileService.getOriginalFilename(id);
             String contentType = getContentTypeFromFilename(originalFilename);
             
+            // Use a simple filename without Unicode encoding to avoid Tomcat issues
+            String safeFilename = originalFilename.replaceAll("[^\\x00-\\x7F]", "_");
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, contentType)
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, 
-                           "attachment; filename*=UTF-8''" + java.net.URLEncoder.encode(originalFilename, "UTF-8"))
+                           "attachment; filename=\"" + safeFilename + "\"")
                     .body(resource);
             
         } catch (DataFileException e) {
             log.error("Error downloading file with ID: {} by user: {}, error: {}", id, username, e.getMessage());
             throw e;
-        } catch (java.io.UnsupportedEncodingException e) {
-            log.error("Error encoding filename for file with ID: {} by user: {}, error: {}", id, username, e.getMessage());
-            throw new DataFileException("Failed to process filename: " + e.getMessage());
         }
     }
     
@@ -345,18 +344,17 @@ public class DataFileController {
             String originalFilename = dataFileService.getOriginalFilename(id);
             String contentType = getContentTypeFromFilename(originalFilename);
             
+            // Use a simple filename without Unicode encoding to avoid Tomcat issues
+            String safeFilename = originalFilename.replaceAll("[^\\x00-\\x7F]", "_");
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, contentType)
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, 
-                           "inline; filename*=UTF-8''" + java.net.URLEncoder.encode(originalFilename, "UTF-8"))
+                           "inline; filename=\"" + safeFilename + "\"")
                     .body(resource);
             
         } catch (DataFileException e) {
             log.error("Error viewing file with ID: {} by user: {}, error: {}", id, username, e.getMessage());
             throw e;
-        } catch (java.io.UnsupportedEncodingException e) {
-            log.error("Error encoding filename for file with ID: {} by user: {}, error: {}", id, username, e.getMessage());
-            throw new DataFileException("Failed to process filename: " + e.getMessage());
         }
     }
 

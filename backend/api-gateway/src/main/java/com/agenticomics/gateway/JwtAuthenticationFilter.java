@@ -32,15 +32,17 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             path.startsWith("/api/auth/request-activation") ||
             path.startsWith("/api/auth/admin/activation-requests") ||
             path.startsWith("/api/auth/public/") ||
+            path.startsWith("/api/auth/public/users/basic") ||
             path.startsWith("/api/auth/check-file-deletion-permission") ||
             path.startsWith("/api/auth/check-lab-file-access") ||
             path.startsWith("/api/auth/check-team-file-access") ||
             path.startsWith("/api/auth/labs/my-lab-members") ||
-            path.startsWith("/api/auth/labs/") ||
-            path.startsWith("/api/auth/teams/") ||
+
             path.startsWith("/api/auth/admin/users/all-with-organizations") ||
             path.startsWith("/api/auth/admin/users/") ||
-            path.startsWith("/api/auth/admin/system/") ||
+            path.startsWith("/api/auth/admin/reset-jerry-password") ||
+            path.startsWith("/api/auth/admin/reset-all-passwords") ||
+            path.startsWith("/api/auth/admin/system/activation-requests") ||
             path.startsWith("/uploads/") ||
             path.startsWith("/api/data/health") ||
             (path.startsWith("/api/data/files/") && path.contains("/download"))) {

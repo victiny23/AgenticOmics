@@ -231,6 +231,17 @@ public class LabService {
                 .collect(Collectors.toList());
     }
     
+    public boolean isUserLabPI(Long userId, Long labId) {
+        Optional<UserLabMembership> membership = userLabMembershipRepository.findByUserIdAndLabIdAndIsActiveTrue(userId, labId);
+        return membership.isPresent() && "Lab PI".equals(membership.get().getRoleInLab());
+    }
+    
+    public List<Lab> getLabsByUser(Long userId) {
+        return userLabMembershipRepository.findByUserIdAndIsActiveTrue(userId).stream()
+                .map(UserLabMembership::getLab)
+                .collect(Collectors.toList());
+    }
+    
     private LabDto convertToDto(Lab lab) {
         return new LabDto(
                 lab.getId(),
