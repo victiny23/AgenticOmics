@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.stream.Collectors;
 import java.time.LocalDateTime;
 import com.agenticomics.auth.dto.UserLabMembershipDto;
 import com.agenticomics.auth.dto.UserTeamMembershipDto;
@@ -314,6 +315,19 @@ public class UserController {
         try {
             List<Map<String, Object>> basicUserInfo = userService.getBasicUserInfo();
             return ResponseEntity.ok(basicUserInfo);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Public endpoint to get users who are NOT members of a specific lab
+     */
+    @GetMapping("/public/users/not-in-lab/{labId}")
+    public ResponseEntity<?> getUsersNotInLab(@PathVariable Long labId) {
+        try {
+            List<Map<String, Object>> usersNotInLab = userService.getUsersNotInLab(labId);
+            return ResponseEntity.ok(usersNotInLab);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving users: " + e.getMessage());
         }
@@ -1566,7 +1580,25 @@ public class UserController {
             
             User user = userOpt.get();
             List<Lab> userLabs = labService.getLabsByUser(user.getId());
-            return ResponseEntity.ok(userLabs);
+            
+            // Convert to simple DTOs to avoid circular references
+            List<Map<String, Object>> labDtos = userLabs.stream()
+                .map(lab -> {
+                    Map<String, Object> dto = new HashMap<>();
+                    dto.put("id", lab.getId());
+                    dto.put("labId", lab.getLabId());
+                    dto.put("labName", lab.getLabName());
+                    dto.put("labDescription", lab.getLabDescription());
+                    dto.put("institution", lab.getInstitution());
+                    dto.put("department", lab.getDepartment());
+                    dto.put("isActive", lab.getIsActive());
+                    dto.put("createdAt", lab.getCreatedAt());
+                    dto.put("updatedAt", lab.getUpdatedAt());
+                    return dto;
+                })
+                .collect(Collectors.toList());
+            
+            return ResponseEntity.ok(labDtos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving user labs: " + e.getMessage());
         }
@@ -1582,7 +1614,23 @@ public class UserController {
             
             User user = userOpt.get();
             List<Team> userTeams = teamService.getTeamsByUser(user.getId());
-            return ResponseEntity.ok(userTeams);
+            
+            // Convert to simple DTOs to avoid circular references
+            List<Map<String, Object>> teamDtos = userTeams.stream()
+                .map(team -> {
+                    Map<String, Object> dto = new HashMap<>();
+                    dto.put("id", team.getId());
+                    dto.put("teamId", team.getTeamId());
+                    dto.put("teamName", team.getTeamName());
+                    dto.put("teamDescription", team.getTeamDescription());
+                    dto.put("isActive", team.getIsActive());
+                    dto.put("createdAt", team.getCreatedAt());
+                    dto.put("updatedAt", team.getUpdatedAt());
+                    return dto;
+                })
+                .collect(Collectors.toList());
+            
+            return ResponseEntity.ok(teamDtos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving user teams: " + e.getMessage());
         }

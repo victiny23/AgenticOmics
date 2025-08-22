@@ -3,6 +3,7 @@ package com.agenticomics.auth.entity;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -54,9 +55,11 @@ public class Lab {
     
     // Relationships
     @OneToMany(mappedBy = "lab", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<UserLabMembership> labMemberships;
     
     @OneToMany(mappedBy = "lab", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<Team> teams;
     
     @PrePersist

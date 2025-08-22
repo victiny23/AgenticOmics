@@ -3,6 +3,7 @@ package com.agenticomics.auth.entity;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -30,10 +31,12 @@ public class Team {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lab_id")
+    @JsonIgnore
     private Lab lab;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "team_leader_id")
+    @JsonIgnore
     private User teamLeader;
     
     @Column(name = "is_active")
@@ -56,6 +59,7 @@ public class Team {
     
     // Relationships
     @OneToMany(mappedBy = "team", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<UserTeamMembership> teamMemberships;
     
     @PrePersist

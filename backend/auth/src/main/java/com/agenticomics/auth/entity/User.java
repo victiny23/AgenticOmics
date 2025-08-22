@@ -69,10 +69,12 @@ public class User {
     
     // Lab memberships (many-to-many relationship)
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<UserLabMembership> labMemberships;
     
     // Team memberships (many-to-many relationship)
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<UserTeamMembership> teamMemberships;
     
     // Legacy supervisor-subordinate relationships (keeping for backward compatibility)

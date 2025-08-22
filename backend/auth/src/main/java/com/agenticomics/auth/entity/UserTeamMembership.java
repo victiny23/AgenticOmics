@@ -3,6 +3,7 @@ package com.agenticomics.auth.entity;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -20,6 +21,7 @@ public class UserTeamMembership {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private User user;
     
     @ManyToOne(fetch = FetchType.LAZY)
@@ -34,6 +36,7 @@ public class UserTeamMembership {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supervisor_id")
+    @JsonIgnore
     private User supervisor; // Supervisor within the team
     
     @Column(name = "is_primary_team")

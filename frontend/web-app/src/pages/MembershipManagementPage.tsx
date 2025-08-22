@@ -120,6 +120,7 @@ const MembershipManagementPage: React.FC = () => {
   const [userLabs, setUserLabs] = useState<Lab[]>([]);
   const [userTeams, setUserTeams] = useState<Team[]>([]);
   const [users, setUsers] = useState<{ username: string; email: string }[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<{ username: string; email: string }[]>([]);
   
   // Dialog states
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
@@ -148,15 +149,15 @@ const MembershipManagementPage: React.FC = () => {
     reviewMessage: ''
   });
 
-  // Debug effect for invitation dialog
+  // Effect for invitation dialog
   useEffect(() => {
     if (invitationDialogOpen) {
-      console.log('Invitation dialog opened');
-      console.log('Current users:', users);
-      console.log('Current labs:', labs);
-      console.log('Current teams:', teams);
+      loadData();
+      loadAllUsers();
     }
-  }, [invitationDialogOpen, users, labs, teams]);
+  }, [invitationDialogOpen]);
+
+  // Debug effect for users state changes - removed to prevent infinite re-renders
   
   const [responseForm, setResponseForm] = useState({
     response: 'ACCEPTED'
@@ -210,7 +211,7 @@ const MembershipManagementPage: React.FC = () => {
       }
 
       // Load labs and teams for forms
-      const [labsRes, teamsRes, userLabsRes, userTeamsRes, usersRes] = await Promise.all([
+      const [labsRes, teamsRes, userLabsRes, userTeamsRes] = await Promise.all([
         fetch('/api/auth/labs', {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
@@ -222,13 +223,10 @@ const MembershipManagementPage: React.FC = () => {
         }),
         fetch('/api/auth/my-teams', {
           headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch('/api/auth/public/users/basic')
+        })
       ]);
-
       if (labsRes.ok) {
         const data = await labsRes.json();
-        console.log('Labs loaded:', data);
         setLabs(data);
       } else {
         console.error('Failed to load labs:', labsRes.status, labsRes.statusText);
@@ -236,7 +234,6 @@ const MembershipManagementPage: React.FC = () => {
       
       if (teamsRes.ok) {
         const data = await teamsRes.json();
-        console.log('Teams loaded:', data);
         setTeams(data);
       } else {
         console.error('Failed to load teams:', teamsRes.status, teamsRes.statusText);
@@ -244,7 +241,6 @@ const MembershipManagementPage: React.FC = () => {
       
       if (userLabsRes.ok) {
         const data = await userLabsRes.json();
-        console.log('User labs loaded:', data);
         setUserLabs(data);
       } else {
         console.error('Failed to load user labs:', userLabsRes.status, userLabsRes.statusText);
@@ -252,18 +248,9 @@ const MembershipManagementPage: React.FC = () => {
       
       if (userTeamsRes.ok) {
         const data = await userTeamsRes.json();
-        console.log('User teams loaded:', data);
         setUserTeams(data);
       } else {
         console.error('Failed to load user teams:', userTeamsRes.status, userTeamsRes.statusText);
-      }
-      
-      if (usersRes.ok) {
-        const data = await usersRes.json();
-        console.log('Users loaded:', data);
-        setUsers(data.map((u: any) => ({ username: u.username, email: u.email })));
-      } else {
-        console.error('Failed to load users:', usersRes.status, usersRes.statusText);
       }
 
       // Load pending approvals for PIs and Team Leaders
@@ -287,7 +274,39 @@ const MembershipManagementPage: React.FC = () => {
         }
       }
     } catch (error) {
+      console.error('Error in loadData:', error);
       setError('Failed to load data');
+    }
+  };
+
+  const loadAllUsers = async () => {
+    try {
+      const response = await fetch('/api/auth/public/users/basic');
+      if (response.ok) {
+        const data = await response.json();
+        const mappedUsers = data.map((u: any) => ({ username: u.username, email: u.email }));
+        setAvailableUsers(mappedUsers);
+      } else {
+        console.error('Failed to load all users:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Error loading all users:', error);
+    }
+  };
+
+  const loadUsersNotInLab = async (labId: number) => {
+    try {
+      const response = await fetch(`/api/auth/public/users/not-in-lab/${labId}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const mappedUsers = data.map((u: any) => ({ username: u.username, email: u.email }));
+        setAvailableUsers(mappedUsers);
+      } else {
+        console.error('Failed to load users not in lab:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Error loading users not in lab:', error);
     }
   };
 
@@ -907,44 +926,55 @@ const MembershipManagementPage: React.FC = () => {
           </Button>
         </DialogTitle>
         <DialogContent>
-          {/* Debug info */}
-          {console.log('Users in dialog:', users)}
-          {console.log('Labs in dialog:', labs)}
-          {console.log('Teams in dialog:', teams)}
-          <FormControl fullWidth sx={{ mt: 2 }}>
-            <InputLabel>User</InputLabel>
-            <Select
-              value={invitationForm.invitedUsername}
-              onChange={(e) => setInvitationForm({ ...invitationForm, invitedUsername: e.target.value })}
-            >
-              {users.length > 0 ? (
-                users.map((user) => (
-                  <MenuItem key={user.username} value={user.username}>
-                    {user.username} ({user.email})
-                  </MenuItem>
-                ))
-              ) : (
-                <MenuItem disabled>Loading users...</MenuItem>
-              )}
-            </Select>
-          </FormControl>
+          {/* Debug info - removed to prevent infinite re-renders */}
           <FormControl fullWidth sx={{ mt: 2 }}>
             <InputLabel>{tabValue === 2 ? 'Lab' : 'Team'}</InputLabel>
             <Select
               value={tabValue === 2 ? invitationForm.labId : invitationForm.teamId}
-              onChange={(e) => setInvitationForm({
-                ...invitationForm,
-                [tabValue === 2 ? 'labId' : 'teamId']: e.target.value
-              })}
+              onChange={(e) => {
+                const selectedId = e.target.value;
+                
+                setInvitationForm({
+                  ...invitationForm,
+                  [tabValue === 2 ? 'labId' : 'teamId']: selectedId,
+                  invitedUsername: '' // Reset user selection when lab/team changes
+                });
+                
+                // If lab is selected, load users not in that lab
+                if (tabValue === 2 && selectedId) {
+                  loadUsersNotInLab(parseInt(selectedId));
+                } else if (tabValue === 2 && !selectedId) {
+                  // If no lab is selected, load all users
+                  loadAllUsers();
+                }
+              }}
             >
-              {(tabValue === 2 ? labs : teams).length > 0 ? (
-                (tabValue === 2 ? labs : teams).map((item) => (
+              {(tabValue === 2 ? userLabs : userTeams).length > 0 ? (
+                (tabValue === 2 ? userLabs : userTeams).map((item) => (
                   <MenuItem key={item.id} value={item.id}>
                     {item.labName || item.teamName}
                   </MenuItem>
                 ))
               ) : (
                 <MenuItem disabled>Loading {tabValue === 2 ? 'labs' : 'teams'}...</MenuItem>
+              )}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel>User</InputLabel>
+            <Select
+              value={invitationForm.invitedUsername}
+              onChange={(e) => setInvitationForm({ ...invitationForm, invitedUsername: e.target.value })}
+              disabled={false}
+            >
+              {availableUsers.length > 0 ? (
+                availableUsers.map((user) => (
+                  <MenuItem key={user.username} value={user.username}>
+                    {user.username} ({user.email})
+                  </MenuItem>
+                ))
+              ) : (
+                <MenuItem disabled>Loading users...</MenuItem>
               )}
             </Select>
           </FormControl>

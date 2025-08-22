@@ -1140,4 +1140,33 @@ public class UserService {
         
         return basicUserInfo;
     }
+
+    /**
+     * Get users who are NOT members of a specific lab
+     */
+    public List<Map<String, Object>> getUsersNotInLab(Long labId) {
+        List<User> allUsers = userRepository.findAllActiveUsers();
+        List<UserLabMembership> labMemberships = userLabMembershipRepository.findByLabIdAndIsActiveTrue(labId);
+        
+        // Get IDs of users who are members of this lab
+        Set<Long> labMemberIds = labMemberships.stream()
+            .map(membership -> membership.getUser().getId())
+            .collect(Collectors.toSet());
+        
+        // Filter out users who are already members of this lab
+        List<User> usersNotInLab = allUsers.stream()
+            .filter(user -> !labMemberIds.contains(user.getId()))
+            .collect(Collectors.toList());
+        
+        List<Map<String, Object>> basicUserInfo = new ArrayList<>();
+        for (User user : usersNotInLab) {
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("username", user.getUsername());
+            userInfo.put("email", user.getEmail());
+            userInfo.put("role", user.getRole());
+            basicUserInfo.add(userInfo);
+        }
+        
+        return basicUserInfo;
+    }
 } 

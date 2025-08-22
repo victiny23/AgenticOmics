@@ -23,9 +23,15 @@ fi
 # Fallback: kill by process name
 echo "🧹 Cleaning up any remaining processes..."
 pkill -f "spring-boot:run" 2>/dev/null && echo "   ✅ Stopped Spring Boot services" || true
-pkill -f "npm start" 2>/dev/null && echo "   ✅ Stopped React development server" || true
+pkill -f "npm" 2>/dev/null && echo "   ✅ Stopped npm processes" || true
+pkill -f "node" 2>/dev/null && echo "   ✅ Stopped Node.js processes" || true
 pkill -f "java.*agenticomics" 2>/dev/null && echo "   ✅ Stopped Java processes" || true
-pkill -f "node.*react-scripts" 2>/dev/null && echo "   ✅ Stopped Node.js processes" || true
+
+# Force kill any process using port 12000 (React dev server)
+if lsof -ti:12000 >/dev/null 2>&1; then
+    echo "   🔥 Force killing processes on port 12000..."
+    lsof -ti:12000 | xargs kill -9 2>/dev/null && echo "   ✅ Killed processes on port 12000" || true
+fi
 
 # Wait a moment for processes to terminate
 sleep 2
