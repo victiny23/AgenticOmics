@@ -36,6 +36,8 @@ import com.agenticomics.auth.dto.LabApplicationResponse;
 import com.agenticomics.auth.dto.TeamApplicationRequest;
 import com.agenticomics.auth.dto.TeamApplicationResponse;
 import com.agenticomics.auth.dto.ApplicationReviewRequest;
+import com.agenticomics.auth.dto.LeaveLabRequest;
+import com.agenticomics.auth.dto.LeaveTeamRequest;
 import com.agenticomics.auth.service.LabApplicationService;
 import com.agenticomics.auth.service.TeamApplicationService;
 import com.agenticomics.auth.service.ActivationRequestService;
@@ -1633,6 +1635,38 @@ public class UserController {
             return ResponseEntity.ok(teamDtos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving user teams: " + e.getMessage());
+        }
+    }
+    
+    @PostMapping("/leave-lab")
+    public ResponseEntity<?> leaveLab(@RequestBody LeaveLabRequest request, @RequestHeader("X-Username") String username) {
+        try {
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            User user = userOpt.get();
+            labService.leaveLab(user.getId(), request.getLabId(), request.getNewPiUsername());
+            return ResponseEntity.ok("Successfully left the lab");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error leaving lab: " + e.getMessage());
+        }
+    }
+    
+    @PostMapping("/leave-team")
+    public ResponseEntity<?> leaveTeam(@RequestBody LeaveTeamRequest request, @RequestHeader("X-Username") String username) {
+        try {
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            User user = userOpt.get();
+            teamService.leaveTeam(user.getId(), request.getTeamId(), request.getNewLeaderUsername());
+            return ResponseEntity.ok("Successfully left the team");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error leaving team: " + e.getMessage());
         }
     }
     

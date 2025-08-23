@@ -10,6 +10,7 @@ import com.agenticomics.auth.repository.UserLabMembershipRepository;
 import com.agenticomics.auth.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -240,6 +241,52 @@ public class LabService {
         return userLabMembershipRepository.findByUserIdAndIsActiveTrue(userId).stream()
                 .map(UserLabMembership::getLab)
                 .collect(Collectors.toList());
+    }
+    
+    @Transactional
+    public void leaveLab(Long userId, Long labId, String newPiUsername) {
+        Optional<UserLabMembership> membershipOpt = userLabMembershipRepository
+                .findByUserIdAndLabIdAndIsActiveTrue(userId, labId);
+        
+        if (membershipOpt.isEmpty()) {
+            throw new RuntimeException("User is not a member of this lab");
+        }
+        
+        UserLabMembership membership = membershipOpt.get();
+        
+        // Check if the user is a PI
+        if ("Lab PI".equals(membership.getRoleInLab())) {
+            if (newPiUsername == null || newPiUsername.trim().isEmpty()) {
+                throw new RuntimeException("PI must assign a new PI before leaving the lab");
+            }
+            
+            // Find the new PI user
+            Optional<User> newPiOpt = userRepository.findByUsername(newPiUsername);
+            if (newPiOpt.isEmpty()) {
+                throw new RuntimeException("New PI user not found: " + newPiUsername);
+            }
+            
+            User newPi = newPiOpt.get();
+            
+            // Check if the new PI is already a member of this lab
+            Optional<UserLabMembership> newPiMembershipOpt = userLabMembershipRepository
+                    .findByUserIdAndLabIdAndIsActiveTrue(newPi.getId(), labId);
+            
+            if (newPiMembershipOpt.isEmpty()) {
+                throw new RuntimeException("New PI must be a member of this lab");
+            }
+            
+            UserLabMembership newPiMembership = newPiMembershipOpt.get();
+            
+            // Transfer PI role to the new user
+            newPiMembership.setRoleInLab("Lab PI");
+            userLabMembershipRepository.save(newPiMembership);
+        }
+        
+        // Remove the user from the lab
+        membership.setIsActive(false);
+        membership.setLeftAt(LocalDateTime.now());
+        userLabMembershipRepository.save(membership);
     }
     
     private LabDto convertToDto(Lab lab) {

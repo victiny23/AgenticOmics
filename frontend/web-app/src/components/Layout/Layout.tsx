@@ -31,6 +31,7 @@ import {
   Logout,
   NotificationsActive,
   Group as GroupIcon,
+  Mail as MailIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -95,6 +96,7 @@ const navigationItems: NavigationItem[] = [
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [notificationCount, setNotificationCount] = useState(0)
   const { isAuthenticated, username, role, photoUrl, logout, getSecurePhotoUrl } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -129,6 +131,125 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     logout()
     handleProfileMenuClose()
     navigate('/')
+  }
+
+  // Fetch notification count
+  useEffect(() => {
+    console.log('🔔 Notification useEffect triggered, isAuthenticated:', isAuthenticated)
+            const fetchNotificationCount = async () => {
+                  if (!isAuthenticated) {
+          setNotificationCount(0)
+          return
+        }
+
+        try {
+          const token = localStorage.getItem('jwtToken')
+          if (!token) {
+            return
+          }
+
+          const [labInvitationsRes, teamInvitationsRes] = await Promise.all([
+            fetch('/api/auth/lab-invitations/my-invitations', {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }),
+            fetch('/api/auth/team-invitations/my-invitations', {
+              headers: { 'Authorization': `Bearer ${token}` }
+            })
+          ])
+
+        let count = 0
+        if (labInvitationsRes.ok) {
+          const labInvitations = await labInvitationsRes.json()
+          console.log('🔍 All lab invitations:', labInvitations)
+          console.log('🔍 Lab invitation statuses:', labInvitations.map((inv: any) => inv.status))
+          const pendingLabInvitations = labInvitations.filter((inv: any) => 
+            inv.status === 'PENDING' || inv.status === 'pending' || inv.status === 'Pending'
+          )
+          count += pendingLabInvitations.length
+          console.log('🔍 Pending lab invitations:', pendingLabInvitations)
+          console.log('🔍 Pending lab invitation details:', pendingLabInvitations.map((inv: any) => ({
+            id: inv.id,
+            from: inv.fromUsername,
+            to: inv.toUsername,
+            lab: inv.labName,
+            role: inv.invitedRole,
+            status: inv.status,
+            message: inv.invitationMessage
+          })))
+        }
+        if (teamInvitationsRes.ok) {
+          const teamInvitations = await teamInvitationsRes.json()
+          console.log('🔍 All team invitations:', teamInvitations)
+          console.log('🔍 Team invitation statuses:', teamInvitations.map((inv: any) => inv.status))
+          const pendingTeamInvitations = teamInvitations.filter((inv: any) => 
+            inv.status === 'PENDING' || inv.status === 'pending' || inv.status === 'Pending'
+          )
+          count += pendingTeamInvitations.length
+          console.log('🔍 Pending team invitations:', pendingTeamInvitations)
+          console.log('🔍 Pending team invitation details:', pendingTeamInvitations.map((inv: any) => ({
+            id: inv.id,
+            from: inv.fromUsername,
+            to: inv.toUsername,
+            team: inv.teamName,
+            role: inv.invitedRole,
+            status: inv.status,
+            message: inv.invitationMessage
+          })))
+        }
+
+        setNotificationCount(count)
+      } catch (error) {
+        console.error('Error fetching notification count:', error)
+      }
+    }
+
+            fetchNotificationCount()
+        // Refresh every 30 seconds
+        const interval = setInterval(fetchNotificationCount, 30000)
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
+
+  const handleNotificationClick = () => {
+    // Redirect to membership page with My Invitations tab selected
+    navigate('/membership?tab=1')
+  }
+
+  const forceRefreshNotifications = async () => {
+    console.log('🔄 Force refreshing notifications...')
+    const token = localStorage.getItem('jwtToken')
+    if (!token) return
+
+    try {
+      const [labInvitationsRes, teamInvitationsRes] = await Promise.all([
+        fetch('/api/auth/lab-invitations/my-invitations', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch('/api/auth/team-invitations/my-invitations', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ])
+
+      let count = 0
+      if (labInvitationsRes.ok) {
+        const labInvitations = await labInvitationsRes.json()
+        const pendingLabInvitations = labInvitations.filter((inv: any) => inv.status === 'PENDING')
+        count += pendingLabInvitations.length
+        console.log('🔄 Lab invitations:', labInvitations)
+        console.log('🔄 Pending lab invitations:', pendingLabInvitations)
+      }
+      if (teamInvitationsRes.ok) {
+        const teamInvitations = await teamInvitationsRes.json()
+        const pendingTeamInvitations = teamInvitations.filter((inv: any) => inv.status === 'PENDING')
+        count += pendingTeamInvitations.length
+        console.log('🔄 Team invitations:', teamInvitations)
+        console.log('🔄 Pending team invitations:', pendingTeamInvitations)
+      }
+
+      console.log('🔄 Total notification count:', count)
+      setNotificationCount(count)
+    } catch (error) {
+      console.error('Error force refreshing notifications:', error)
+    }
   }
 
   const drawer = (
@@ -421,6 +542,46 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               (location.pathname === '/' && item.path === '/welcome')
             )?.text || 'AgenticOmics'}
           </Typography>
+
+          {/* Notification Icon */}
+          {isAuthenticated && (
+            <IconButton
+              size="large"
+              edge="end"
+              aria-label="notifications"
+              onClick={handleNotificationClick}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                forceRefreshNotifications()
+              }}
+              color="inherit"
+              sx={{ mr: 1, position: 'relative' }}
+            >
+              <MailIcon />
+              {notificationCount > 0 && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    backgroundColor: '#f44336',
+                    color: 'white',
+                    borderRadius: '50%',
+                    width: 20,
+                    height: 20,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {notificationCount > 9 ? '9+' : notificationCount}
+                </Box>
+              )}
+
+            </IconButton>
+          )}
 
           <IconButton
             size="large"

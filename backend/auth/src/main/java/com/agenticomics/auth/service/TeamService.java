@@ -12,6 +12,7 @@ import com.agenticomics.auth.repository.UserRepository;
 import com.agenticomics.auth.repository.UserTeamMembershipRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -262,6 +263,52 @@ public class TeamService {
         return userTeamMembershipRepository.findByUserIdAndIsActiveTrue(userId).stream()
                 .map(UserTeamMembership::getTeam)
                 .collect(Collectors.toList());
+    }
+    
+    @Transactional
+    public void leaveTeam(Long userId, Long teamId, String newLeaderUsername) {
+        Optional<UserTeamMembership> membershipOpt = userTeamMembershipRepository
+                .findByUserIdAndTeamIdAndIsActiveTrue(userId, teamId);
+        
+        if (membershipOpt.isEmpty()) {
+            throw new RuntimeException("User is not a member of this team");
+        }
+        
+        UserTeamMembership membership = membershipOpt.get();
+        
+        // Check if the user is a Team Leader
+        if ("Team Leader".equals(membership.getRoleInTeam())) {
+            if (newLeaderUsername == null || newLeaderUsername.trim().isEmpty()) {
+                throw new RuntimeException("Team Leader must assign a new leader before leaving the team");
+            }
+            
+            // Find the new leader user
+            Optional<User> newLeaderOpt = userRepository.findByUsername(newLeaderUsername);
+            if (newLeaderOpt.isEmpty()) {
+                throw new RuntimeException("New team leader not found: " + newLeaderUsername);
+            }
+            
+            User newLeader = newLeaderOpt.get();
+            
+            // Check if the new leader is already a member of this team
+            Optional<UserTeamMembership> newLeaderMembershipOpt = userTeamMembershipRepository
+                    .findByUserIdAndTeamIdAndIsActiveTrue(newLeader.getId(), teamId);
+            
+            if (newLeaderMembershipOpt.isEmpty()) {
+                throw new RuntimeException("New team leader must be a member of this team");
+            }
+            
+            UserTeamMembership newLeaderMembership = newLeaderMembershipOpt.get();
+            
+            // Transfer leader role to the new user
+            newLeaderMembership.setRoleInTeam("Team Leader");
+            userTeamMembershipRepository.save(newLeaderMembership);
+        }
+        
+        // Remove the user from the team
+        membership.setIsActive(false);
+        membership.setLeftAt(LocalDateTime.now());
+        userTeamMembershipRepository.save(membership);
     }
     
     private TeamDto convertToDto(Team team) {
