@@ -28,6 +28,9 @@ public interface LabInvitationRepository extends JpaRepository<LabInvitation, Lo
     @Query("SELECT i FROM LabInvitation i WHERE i.invitedUser.username = :username AND i.lab.id = :labId AND i.status = :status")
     Optional<LabInvitation> findByInvitedUsernameAndLabIdAndStatus(@Param("username") String username, @Param("labId") Long labId, @Param("status") LabInvitation.InvitationStatus status);
     
+    @Query("SELECT i FROM LabInvitation i WHERE i.invitedUser.username = :username AND i.lab.id = :labId")
+    List<LabInvitation> findByInvitedUsernameAndLabId(@Param("username") String username, @Param("labId") Long labId);
+    
     @Query("SELECT i FROM LabInvitation i WHERE i.expiresAt < :now AND i.status = 'PENDING'")
     List<LabInvitation> findExpiredPendingInvitations(@Param("now") LocalDateTime now);
     

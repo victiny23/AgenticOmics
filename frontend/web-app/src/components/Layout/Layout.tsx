@@ -93,6 +93,16 @@ const navigationItems: NavigationItem[] = [
   },
 ]
 
+// Admin navigation items (shown only to Lab PIs, Team Leaders, and Super Admins)
+const adminNavigationItems: NavigationItem[] = [
+  {
+    text: 'Unified Management',
+    icon: <GroupIcon />,
+    path: '/unified-management',
+    description: 'User management and member management in one place',
+  },
+]
+
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
@@ -158,6 +168,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           ])
 
         let count = 0
+        
+        // Check for invitations that need user response (PENDING status)
         if (labInvitationsRes.ok) {
           const labInvitations = await labInvitationsRes.json()
           console.log('🔍 All lab invitations:', labInvitations)
@@ -166,16 +178,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             inv.status === 'PENDING' || inv.status === 'pending' || inv.status === 'Pending'
           )
           count += pendingLabInvitations.length
-          console.log('🔍 Pending lab invitations:', pendingLabInvitations)
-          console.log('🔍 Pending lab invitation details:', pendingLabInvitations.map((inv: any) => ({
-            id: inv.id,
-            from: inv.fromUsername,
-            to: inv.toUsername,
-            lab: inv.labName,
-            role: inv.invitedRole,
-            status: inv.status,
-            message: inv.invitationMessage
-          })))
+          console.log('🔍 Pending lab invitations (for response):', pendingLabInvitations)
         }
         if (teamInvitationsRes.ok) {
           const teamInvitations = await teamInvitationsRes.json()
@@ -185,18 +188,64 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             inv.status === 'PENDING' || inv.status === 'pending' || inv.status === 'Pending'
           )
           count += pendingTeamInvitations.length
-          console.log('🔍 Pending team invitations:', pendingTeamInvitations)
-          console.log('🔍 Pending team invitation details:', pendingTeamInvitations.map((inv: any) => ({
-            id: inv.id,
-            from: inv.fromUsername,
-            to: inv.toUsername,
-            team: inv.teamName,
-            role: inv.invitedRole,
-            status: inv.status,
-            message: inv.invitationMessage
-          })))
+          console.log('🔍 Pending team invitations (for response):', pendingTeamInvitations)
         }
 
+        // Check for invitations that need PI/Leader approval (PENDING_APPROVAL status)
+        // Only check if user is a PI or Leader
+        const userRole = localStorage.getItem('role')
+        console.log('🔍 Current user role for notification:', userRole)
+        if (userRole === 'Lab PI' || userRole === 'Super Admin') {
+          try {
+            const username = localStorage.getItem('username')
+            if (username) {
+              const pendingLabApprovalsRes = await fetch('/api/auth/lab-invitations/pending-approvals', {
+                headers: { 
+                  'X-Username': username,
+                  'Authorization': `Bearer ${token}`
+                }
+              })
+              if (pendingLabApprovalsRes.ok) {
+                const pendingLabApprovals = await pendingLabApprovalsRes.json()
+                const pendingApprovalCount = pendingLabApprovals.filter((inv: any) => 
+                  inv.status === 'PENDING_APPROVAL' || inv.status === 'pending_approval' || inv.status === 'Pending_Approval' ||
+                  inv.status === 'PENDING' || inv.status === 'pending' || inv.status === 'Pending'
+                ).length
+                count += pendingApprovalCount
+                console.log('🔍 Pending lab approvals (for PI):', pendingApprovalCount)
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching pending lab approvals:', error)
+          }
+        }
+
+        if (userRole === 'Team Leader' || userRole === 'Super Admin') {
+          try {
+            const username = localStorage.getItem('username')
+            if (username) {
+              const pendingTeamApprovalsRes = await fetch('/api/auth/team-invitations/pending-approvals', {
+                headers: { 
+                  'X-Username': username,
+                  'Authorization': `Bearer ${token}`
+                }
+              })
+              if (pendingTeamApprovalsRes.ok) {
+                const pendingTeamApprovals = await pendingTeamApprovalsRes.json()
+                const pendingApprovalCount = pendingTeamApprovals.filter((inv: any) => 
+                  inv.status === 'PENDING_APPROVAL' || inv.status === 'pending_approval' || inv.status === 'Pending_Approval' ||
+                  inv.status === 'PENDING' || inv.status === 'pending' || inv.status === 'Pending'
+                ).length
+                count += pendingApprovalCount
+                console.log('🔍 Pending team approvals (for Leader):', pendingApprovalCount)
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching pending team approvals:', error)
+          }
+        }
+
+        console.log('🔍 Setting notification count to:', count)
         setNotificationCount(count)
       } catch (error) {
         console.error('Error fetching notification count:', error)
@@ -210,8 +259,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, [isAuthenticated])
 
   const handleNotificationClick = () => {
-    // Redirect to membership page with My Invitations tab selected
-    navigate('/membership?tab=1')
+    // Redirect to membership page with appropriate tab selected
+    const userRole = localStorage.getItem('role')
+    if (userRole === 'Lab PI' || userRole === 'Team Leader' || userRole === 'Super Admin') {
+      // For PIs/Leaders, redirect to Pending Approvals tab
+      navigate('/membership?tab=2')
+    } else {
+      // For regular users, redirect to My Invitations tab
+      navigate('/membership?tab=1')
+    }
   }
 
   const forceRefreshNotifications = async () => {
@@ -230,19 +286,55 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       ])
 
       let count = 0
+      
+      // Check for invitations that need user response (PENDING status)
       if (labInvitationsRes.ok) {
         const labInvitations = await labInvitationsRes.json()
         const pendingLabInvitations = labInvitations.filter((inv: any) => inv.status === 'PENDING')
         count += pendingLabInvitations.length
         console.log('🔄 Lab invitations:', labInvitations)
-        console.log('🔄 Pending lab invitations:', pendingLabInvitations)
+        console.log('🔄 Pending lab invitations (for response):', pendingLabInvitations)
       }
       if (teamInvitationsRes.ok) {
         const teamInvitations = await teamInvitationsRes.json()
         const pendingTeamInvitations = teamInvitations.filter((inv: any) => inv.status === 'PENDING')
         count += pendingTeamInvitations.length
         console.log('🔄 Team invitations:', teamInvitations)
-        console.log('🔄 Pending team invitations:', pendingTeamInvitations)
+        console.log('🔄 Pending team invitations (for response):', pendingTeamInvitations)
+      }
+
+      // Check for invitations that need PI/Leader approval (PENDING_APPROVAL status)
+      const userRole = localStorage.getItem('role')
+      if (userRole === 'Lab PI' || userRole === 'Super Admin') {
+        try {
+          const pendingLabApprovalsRes = await fetch('/api/auth/lab-invitations/pending-approvals', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          if (pendingLabApprovalsRes.ok) {
+            const pendingLabApprovals = await pendingLabApprovalsRes.json()
+            const pendingApprovalCount = pendingLabApprovals.filter((inv: any) => inv.status === 'PENDING_APPROVAL').length
+            count += pendingApprovalCount
+            console.log('🔄 Pending lab approvals (for PI):', pendingApprovalCount)
+          }
+        } catch (error) {
+          console.error('Error fetching pending lab approvals:', error)
+        }
+      }
+
+      if (userRole === 'Team Leader' || userRole === 'Super Admin') {
+        try {
+          const pendingTeamApprovalsRes = await fetch('/api/auth/team-invitations/pending-approvals', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          if (pendingTeamApprovalsRes.ok) {
+            const pendingTeamApprovals = await pendingTeamApprovalsRes.json()
+            const pendingApprovalCount = pendingTeamApprovals.filter((inv: any) => inv.status === 'PENDING_APPROVAL').length
+            count += pendingApprovalCount
+            console.log('🔄 Pending team approvals (for Leader):', pendingApprovalCount)
+          }
+        } catch (error) {
+          console.error('Error fetching pending team approvals:', error)
+        }
       }
 
       console.log('🔄 Total notification count:', count)
@@ -343,6 +435,59 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           )
         })}
         
+        {/* Admin Navigation Items for Lab PIs, Team Leaders, and Super Admins */}
+        {(role === 'Lab PI' || role === 'Team Leader' || role === 'Super Admin') && (
+          <>
+            {adminNavigationItems.map((item) => {
+              const isActive = location.pathname === item.path;
+              
+              return (
+                <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
+                  <ListItemButton
+                    onClick={() => handleNavigation(item.path)}
+                    sx={{
+                      borderRadius: 2,
+                      mx: 1,
+                      backgroundColor: isActive ? 'rgba(25, 118, 210, 0.2)' : 'transparent',
+                      '&:hover': {
+                        backgroundColor: isActive 
+                          ? 'rgba(25, 118, 210, 0.3)' 
+                          : 'rgba(255, 255, 255, 0.1)',
+                      },
+                      border: isActive ? '1px solid rgba(25, 118, 210, 0.5)' : '1px solid transparent',
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        color: isActive ? '#42a5f5' : '#b0b0b0',
+                        minWidth: 40,
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.text}
+                      secondary={item.description}
+                      primaryTypographyProps={{
+                        sx: {
+                          color: isActive ? 'white' : '#e0e0e0',
+                          fontWeight: isActive ? 600 : 400,
+                        },
+                      }}
+                      secondaryTypographyProps={{
+                        sx: {
+                          color: '#888',
+                          fontSize: '0.75rem',
+                        },
+                      }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              )
+            })}
+          </>
+        )}
+        
         {/* System Administration for Super Admin */}
         {role === 'Super Admin' && (
             <ListItem disablePadding sx={{ mb: 1 }}>
@@ -388,50 +533,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </ListItem>
         )}
         
-        {/* User Management for PI users (not Super Admin) */}
-        {role === 'Lab PI' && (
-          <ListItem disablePadding sx={{ mb: 1 }}>
-            <ListItemButton
-              onClick={() => handleNavigation('/admin/users')}
-              sx={{
-                borderRadius: 2,
-                mx: 1,
-                backgroundColor: location.pathname === '/admin/users' ? 'rgba(25, 118, 210, 0.2)' : 'transparent',
-                '&:hover': {
-                  backgroundColor: location.pathname === '/admin/users' 
-                    ? 'rgba(25, 118, 210, 0.3)' 
-                    : 'rgba(255, 255, 255, 0.1)',
-                },
-                border: location.pathname === '/admin/users' ? '1px solid rgba(25, 118, 210, 0.5)' : '1px solid transparent',
-              }}
-            >
-              <ListItemIcon
-                sx={{
-                  color: location.pathname === '/admin/users' ? '#42a5f5' : '#b0b0b0',
-                  minWidth: 40,
-                }}
-              >
-                <AdminPanelSettings />
-              </ListItemIcon>
-              <ListItemText
-                primary="User Management"
-                secondary="Manage user accounts and permissions"
-                primaryTypographyProps={{
-                  sx: {
-                    color: location.pathname === '/admin/users' ? 'white' : '#e0e0e0',
-                    fontWeight: location.pathname === '/admin/users' ? 600 : 400,
-                  },
-                }}
-                secondaryTypographyProps={{
-                  sx: {
-                    color: '#888',
-                    fontSize: '0.75rem',
-                  },
-                }}
-              />
-            </ListItemButton>
-          </ListItem>
-        )}
+
         
         {/* Activation Requests for PI users and Super Admin */}
         {(role === 'Lab PI' || role === 'Super Admin') && (
@@ -544,6 +646,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </Typography>
 
           {/* Notification Icon */}
+          {console.log('🔍 Notification icon render - isAuthenticated:', isAuthenticated, 'count:', notificationCount)}
           {isAuthenticated && (
             <IconButton
               size="large"

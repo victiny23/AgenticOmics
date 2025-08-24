@@ -68,7 +68,7 @@ interface LabInvitation {
   invitedByUsername: string;
   invitedRole: string;
   invitationMessage: string;
-  status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
+  status: 'PENDING_APPROVAL' | 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
   respondedAt?: string;
   expiresAt: string;
   createdAt: string;
@@ -85,7 +85,7 @@ interface TeamInvitation {
   invitedByUsername: string;
   invitedRole: string;
   invitationMessage: string;
-  status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
+  status: 'PENDING_APPROVAL' | 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
   respondedAt?: string;
   expiresAt: string;
   createdAt: string;
@@ -137,6 +137,22 @@ const MembershipManagementPage: React.FC = () => {
   const [users, setUsers] = useState<{ username: string; email: string }[]>([]);
   const [availableUsers, setAvailableUsers] = useState<{ username: string; email: string }[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
+  
+  // Member management data
+  const [labMembers, setLabMembers] = useState<any[]>([]);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [managedLabs, setManagedLabs] = useState<Lab[]>([]);
+  const [managedTeams, setManagedTeams] = useState<Team[]>([]);
+  
+  // Remove member functionality
+  const [removeMemberDialogOpen, setRemoveMemberDialogOpen] = useState(false);
+  const [removeMemberType, setRemoveMemberType] = useState<'lab' | 'team'>('lab');
+  const [selectedMemberToRemove, setSelectedMemberToRemove] = useState<any>(null);
+  const [removeMemberForm, setRemoveMemberForm] = useState({
+    username: '',
+    labName: '',
+    teamName: ''
+  });
   
   // Dialog states
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
@@ -209,6 +225,13 @@ const MembershipManagementPage: React.FC = () => {
     loadUserProfile();
   }, []);
 
+  // Load managed labs and teams when user profile is loaded
+  useEffect(() => {
+    if (userProfile) {
+      loadManagedLabsAndTeams();
+    }
+  }, [userProfile]);
+
   // Handle URL parameter for tab selection
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -250,11 +273,13 @@ const MembershipManagementPage: React.FC = () => {
       
       if (labInvitationsRes.ok) {
         const data = await labInvitationsRes.json();
+        console.log('🔍 Loaded lab invitations for user:', username, data);
         setLabInvitations(data);
       }
       
       if (teamInvitationsRes.ok) {
         const data = await teamInvitationsRes.json();
+        console.log('🔍 Loaded team invitations for user:', username, data);
         setTeamInvitations(data);
       }
 
@@ -308,7 +333,10 @@ const MembershipManagementPage: React.FC = () => {
         });
         if (pendingLabApprovalsRes.ok) {
           const data = await pendingLabApprovalsRes.json();
+          console.log('🔍 Loaded pending lab approvals for PI:', username, data);
           setPendingLabApprovals(data);
+        } else {
+          console.log('🔍 Failed to load pending lab approvals:', pendingLabApprovalsRes.status, pendingLabApprovalsRes.statusText);
         }
       }
 
@@ -429,6 +457,120 @@ const MembershipManagementPage: React.FC = () => {
       console.error('Error loading team members:', error);
     }
   };
+
+  // Load members for a specific lab (for member management)
+  const loadLabMembersForManagement = async (labId: number) => {
+    if (!token) return;
+    
+    try {
+      const [labResponse, usersResponse] = await Promise.all([
+        fetch(`/api/auth/labs/${labId}/members`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch('/api/auth/public/users/basic')
+      ]);
+      
+      if (labResponse.ok && usersResponse.ok) {
+        const labData = await labResponse.json();
+        const usersData = await usersResponse.json();
+        
+        // Map lab members with their emails and include lab info
+        const mappedMembers = labData
+          .filter((member: any) => member.username !== username) // Exclude current user
+          .map((member: any) => {
+            const userInfo = usersData.find((user: any) => user.username === member.username);
+            return {
+              username: member.username,
+              email: userInfo ? userInfo.email : member.username + '@test.com',
+              roleInLab: member.roleInLab,
+              labName: member.labName || 'Unknown Lab'
+            };
+          });
+        
+        setLabMembers(mappedMembers);
+      } else {
+        console.error('Failed to load lab members or users:', labResponse.status, usersResponse.status);
+      }
+    } catch (error) {
+      console.error('Error loading lab members:', error);
+    }
+  };
+
+  // Load members for a specific team (for member management)
+  const loadTeamMembersForManagement = async (teamId: number) => {
+    if (!token) return;
+    
+    try {
+      const [teamResponse, usersResponse] = await Promise.all([
+        fetch(`/api/auth/teams/${teamId}/members`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch('/api/auth/public/users/basic')
+      ]);
+      
+      if (teamResponse.ok && usersResponse.ok) {
+        const teamData = await teamResponse.json();
+        const usersData = await usersResponse.json();
+        
+        // Map team members with their emails and include team info
+        const mappedMembers = teamData
+          .filter((member: any) => member.username !== username) // Exclude current user
+          .map((member: any) => {
+            const userInfo = usersData.find((user: any) => user.username === member.username);
+            return {
+              username: member.username,
+              email: userInfo ? userInfo.email : member.username + '@test.com',
+              roleInTeam: member.roleInTeam,
+              teamName: member.teamName || 'Unknown Team',
+              labName: member.labName || 'Unknown Lab'
+            };
+          });
+        
+        setTeamMembers(mappedMembers);
+      } else {
+        console.error('Failed to load team members or users:', teamResponse.status, usersResponse.status);
+      }
+    } catch (error) {
+      console.error('Error loading team members:', error);
+    }
+  };
+
+  // Load managed labs and teams (labs where user is PI, teams where user is leader)
+  const loadManagedLabsAndTeams = async () => {
+    if (!token) return;
+    
+    try {
+      // Load labs where user is PI
+      const managedLabsRes = await fetch('/api/auth/labs', { 
+        headers: { 'Authorization': `Bearer ${token}` } 
+      });
+      if (managedLabsRes.ok) {
+        const allLabs = await managedLabsRes.json();
+        // Filter labs where user is PI (this would need backend support)
+        setManagedLabs(allLabs.filter((lab: Lab) => 
+          userProfile?.labMemberships?.some((membership: any) => 
+            membership.labId === lab.id && membership.roleInLab === 'Lab PI'
+          )
+        ));
+      }
+      
+      // Load teams where user is leader
+      const managedTeamsRes = await fetch('/api/auth/teams', { 
+        headers: { 'Authorization': `Bearer ${token}` } 
+      });
+      if (managedTeamsRes.ok) {
+        const allTeams = await managedTeamsRes.json();
+        // Filter teams where user is leader (this would need backend support)
+        setManagedTeams(allTeams.filter((team: Team) => 
+          userProfile?.teamMemberships?.some((membership: any) => 
+            membership.teamId === team.id && membership.roleInTeam === 'Team Leader'
+          )
+        ));
+      }
+    } catch (error) {
+      console.error('Error loading managed labs and teams:', error);
+    }
+  };
   
   const getCurrentUserRoleInLab = async (labId: number) => {
     try {
@@ -529,6 +671,77 @@ const MembershipManagementPage: React.FC = () => {
       setError('Error leaving team: ' + error);
     }
   };
+
+  // Remove member functions
+  const openRemoveMemberDialog = (type: 'lab' | 'team', member: any) => {
+    setRemoveMemberType(type);
+    setSelectedMemberToRemove(member);
+    setRemoveMemberForm({
+      username: member.username,
+      labName: type === 'lab' ? member.labName : member.labName,
+      teamName: type === 'team' ? member.teamName : ''
+    });
+    setRemoveMemberDialogOpen(true);
+  };
+
+  const handleRemoveMember = async () => {
+    if (!token || !selectedMemberToRemove) return;
+    
+    try {
+      const endpoint = removeMemberType === 'lab' 
+        ? '/api/auth/admin/lab-memberships'
+        : '/api/auth/admin/team-memberships';
+      
+      const body = removeMemberType === 'lab'
+        ? {
+            username: removeMemberForm.username,
+            labName: removeMemberForm.labName
+          }
+        : {
+            username: removeMemberForm.username,
+            teamName: removeMemberForm.teamName
+          };
+      
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || ''
+        },
+        body: JSON.stringify(body)
+      });
+      
+      if (response.ok) {
+        setSuccess(`Successfully removed ${removeMemberForm.username} from ${removeMemberType === 'lab' ? removeMemberForm.labName : removeMemberForm.teamName}`);
+        setRemoveMemberDialogOpen(false);
+        setRemoveMemberForm({ username: '', labName: '', teamName: '' });
+        setSelectedMemberToRemove(null);
+        
+        // Refresh the member lists
+        if (removeMemberType === 'lab') {
+          // Find the lab that was just updated and refresh its members
+          const updatedLab = managedLabs.find(lab => lab.labName === removeMemberForm.labName);
+          if (updatedLab) {
+            loadLabMembersForManagement(updatedLab.id);
+          }
+        } else {
+          // Find the team that was just updated and refresh its members
+          const updatedTeam = managedTeams.find(team => team.teamName === removeMemberForm.teamName);
+          if (updatedTeam) {
+            loadTeamMembersForManagement(updatedTeam.id);
+          }
+        }
+        
+        loadData();
+      } else {
+        const errorText = await response.text();
+        setError(`Failed to remove member: ${errorText}`);
+      }
+    } catch (error) {
+      setError('Failed to remove member');
+    }
+  };
   
   const openLeaveDialog = (type: 'lab' | 'team', lab?: Lab, team?: Team) => {
     setLeaveType(type);
@@ -585,7 +798,10 @@ const MembershipManagementPage: React.FC = () => {
         ? { invitedUsername: invitationForm.invitedUsername, labId: parseInt(invitationForm.labId), invitedRole: invitationForm.invitedRole, invitationMessage: invitationForm.invitationMessage }
         : { invitedUsername: invitationForm.invitedUsername, teamId: parseInt(invitationForm.teamId), invitedRole: invitationForm.invitedRole, invitationMessage: invitationForm.invitationMessage };
 
-
+      console.log('🔍 Sending invitation with body:', body);
+      console.log('🔍 Endpoint:', endpoint);
+      console.log('🔍 Lab ID being sent:', invitationForm.labId);
+      console.log('🔍 Available labs:', labs);
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -596,17 +812,24 @@ const MembershipManagementPage: React.FC = () => {
         body: JSON.stringify(body)
       });
 
+      console.log('🔍 Response status:', response.status);
+      console.log('🔍 Response ok:', response.ok);
+
       if (response.ok) {
+        const result = await response.json();
+        console.log('🔍 Invitation created successfully:', result);
         setSuccess('Invitation sent successfully');
         setInvitationDialogOpen(false);
         setInvitationForm({ invitedUsername: '', labId: '', teamId: '', invitedRole: '', invitationMessage: '' });
         loadData();
       } else {
         const error = await response.text();
+        console.log('🔍 Error response:', error);
         setError(error);
         // Don't reset form on error so user can fix and retry
       }
     } catch (error) {
+      console.log('🔍 Exception occurred:', error);
       setError('Failed to send invitation');
       // Don't reset form on error so user can fix and retry
     }
@@ -669,8 +892,8 @@ const MembershipManagementPage: React.FC = () => {
         setResponseForm({ response: 'ACCEPTED' });
         loadData();
       } else {
-        const error = await response.text();
-        setError(error);
+        const errorText = await response.text();
+        setError(`Failed to submit response: ${errorText}`);
       }
     } catch (error) {
       setError('Failed to submit response');
@@ -708,6 +931,7 @@ const MembershipManagementPage: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'PENDING_APPROVAL': return 'info';
       case 'PENDING': return 'warning';
       case 'APPROVED': case 'ACCEPTED': return 'success';
       case 'REJECTED': case 'DECLINED': return 'error';
@@ -735,6 +959,7 @@ const MembershipManagementPage: React.FC = () => {
         <Tab label="Pending Approvals" />
         <Tab label="My Memberships" />
         <Tab label="Send Invitations" />
+        <Tab label="Manage Members" />
       </Tabs>
 
       {/* My Applications - Lab and Team Requests */}
@@ -834,22 +1059,12 @@ const MembershipManagementPage: React.FC = () => {
           {/* Lab Invitations */}
           {invitationTabValue === 0 && (
         <Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6">Lab Invitations</Typography>
-            <Button 
-              variant="contained" 
-              onClick={() => setInvitationDialogOpen(true)}
-              disabled={!username}
-              title={!username ? 'Please login to send invitations' : 'Send lab invitation'}
-            >
-              Invite to Lab
-            </Button>
-          </Box>
+          <Typography variant="h6" sx={{ mb: 2 }}>Lab Invitations</Typography>
           
           {!username && (
             <Alert severity="info" sx={{ mb: 2 }}>
               <Typography variant="body2">
-                Please login to send lab invitations. All lab members can invite others, but invitations require PI approval.
+                Please login to view your lab invitations.
               </Typography>
             </Alert>
           )}
@@ -873,6 +1088,11 @@ const MembershipManagementPage: React.FC = () => {
                     <Typography variant="caption" display="block" sx={{ mt: 1 }}>
                       Expires: {formatDate(invitation.expiresAt)}
                     </Typography>
+                    {invitation.status === 'PENDING_APPROVAL' && (
+                      <Alert severity="info" sx={{ mt: 2 }}>
+                        This invitation is waiting for PI approval before you can respond.
+                      </Alert>
+                    )}
                     {invitation.status === 'PENDING' && (
                       <Box sx={{ mt: 2 }}>
                         <Button 
@@ -913,24 +1133,15 @@ const MembershipManagementPage: React.FC = () => {
           {/* Team Invitations */}
           {invitationTabValue === 1 && (
             <Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Box>
-                  <Typography variant="h6">Team Invitations</Typography>
-                  {!username && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      Please login to send team invitations. All team members can invite others, but invitations require Leader approval.
-                    </Typography>
-                  )}
-                </Box>
-                <Button 
-                  variant="contained" 
-                  onClick={() => setInvitationDialogOpen(true)}
-                  disabled={!username}
-                  title={!username ? 'Please login to send invitations' : 'Send team invitation'}
-                >
-                  Invite to Team
-                </Button>
-              </Box>
+              <Typography variant="h6" sx={{ mb: 2 }}>Team Invitations</Typography>
+              
+              {!username && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    Please login to view your team invitations.
+                  </Typography>
+                </Alert>
+              )}
           
           <Grid container spacing={2}>
             {teamInvitations.map((invitation) => (
@@ -952,6 +1163,11 @@ const MembershipManagementPage: React.FC = () => {
                     <Typography variant="caption" display="block" sx={{ mt: 1 }}>
                       Expires: {formatDate(invitation.expiresAt)}
                     </Typography>
+                    {invitation.status === 'PENDING_APPROVAL' && (
+                      <Alert severity="info" sx={{ mt: 2 }}>
+                        This invitation is waiting for Team Leader approval before you can respond.
+                      </Alert>
+                    )}
                     {invitation.status === 'PENDING' && (
                       <Box sx={{ mt: 2 }}>
                         <Button 
@@ -997,7 +1213,7 @@ const MembershipManagementPage: React.FC = () => {
           <Typography variant="h6" sx={{ mb: 2 }}>Pending Approvals</Typography>
           
           {/* Lab Approvals */}
-          {(role === 'Lab PI' || role === 'Super Admin') && (
+          {(role === 'Super Admin' || userProfile?.labMemberships?.some((membership: any) => membership.roleInLab === 'Lab PI' && membership.isActive)) && (
             <Box sx={{ mb: 4 }}>
               <Typography variant="h6" sx={{ mb: 2 }}>Lab Invitations Pending Approval</Typography>
               <Grid container spacing={2}>
@@ -1020,7 +1236,7 @@ const MembershipManagementPage: React.FC = () => {
                         <Typography variant="caption" display="block" sx={{ mt: 1 }}>
                           Expires: {formatDate(invitation.expiresAt)}
                         </Typography>
-                        {invitation.status === 'PENDING' && (
+                        {(invitation.status === 'PENDING' || invitation.status === 'PENDING_APPROVAL') && (
                           <Box sx={{ mt: 2 }}>
                             <Button 
                               variant="contained" 
@@ -1029,7 +1245,7 @@ const MembershipManagementPage: React.FC = () => {
                               sx={{ mr: 1 }}
                               onClick={() => handleApprovalSubmit(invitation.id, 'APPROVED', 'lab')}
                             >
-                              Approve
+                              {invitation.status === 'PENDING_APPROVAL' ? 'Approve for Invitee' : 'Force Accept'}
                             </Button>
                             <Button 
                               variant="contained" 
@@ -1055,7 +1271,7 @@ const MembershipManagementPage: React.FC = () => {
           )}
 
           {/* Team Approvals */}
-          {(role === 'Team Leader' || role === 'Super Admin') && (
+          {(role === 'Super Admin' || userProfile?.teamMemberships?.some((membership: any) => membership.roleInTeam === 'Team Leader' && membership.isActive)) && (
             <Box>
               <Typography variant="h6" sx={{ mb: 2 }}>Team Invitations Pending Approval</Typography>
               <Grid container spacing={2}>
@@ -1078,7 +1294,7 @@ const MembershipManagementPage: React.FC = () => {
                         <Typography variant="caption" display="block" sx={{ mt: 1 }}>
                           Expires: {formatDate(invitation.expiresAt)}
                         </Typography>
-                        {invitation.status === 'PENDING' && (
+                        {(invitation.status === 'PENDING' || invitation.status === 'PENDING_APPROVAL') && (
                           <Box sx={{ mt: 2 }}>
                             <Button 
                               variant="contained" 
@@ -1087,7 +1303,7 @@ const MembershipManagementPage: React.FC = () => {
                               sx={{ mr: 1 }}
                               onClick={() => handleApprovalSubmit(invitation.id, 'APPROVED', 'team')}
                             >
-                              Approve
+                              {invitation.status === 'PENDING_APPROVAL' ? 'Approve for Invitee' : 'Force Accept'}
                             </Button>
                             <Button 
                               variant="contained" 
@@ -1112,7 +1328,9 @@ const MembershipManagementPage: React.FC = () => {
             </Box>
           )}
 
-          {role !== 'Lab PI' && role !== 'Team Leader' && role !== 'Super Admin' && (
+          {role !== 'Super Admin' && 
+           !userProfile?.labMemberships?.some((membership: any) => membership.roleInLab === 'Lab PI' && membership.isActive) &&
+           !userProfile?.teamMemberships?.some((membership: any) => membership.roleInTeam === 'Team Leader' && membership.isActive) && (
             <Alert severity="info">
               You don't have permission to approve invitations. Only Lab PIs, Team Leaders, and Super Admins can approve invitations.
             </Alert>
@@ -1219,11 +1437,11 @@ const MembershipManagementPage: React.FC = () => {
                   <Typography variant="h6">Lab Invitations</Typography>
                   {!username ? (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      Please login to send lab invitations. Only Lab PIs can send invitations.
+                      Please login to send lab invitations. All lab members can send invitations, but invitations require PI approval.
                     </Typography>
-                  ) : !userProfile?.labMemberships?.some((membership: any) => membership.roleInLab === 'Lab PI') ? (
+                  ) : !userProfile?.labMemberships?.some((membership: any) => membership.isActive) ? (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      Only Lab PIs can send lab invitations. You are not a Lab PI in any lab.
+                      You need to be a member of at least one lab to send lab invitations.
                     </Typography>
                   ) : null}
                 </Box>
@@ -1233,9 +1451,9 @@ const MembershipManagementPage: React.FC = () => {
                     setInvitationTabValue(0); // Set to lab invitation
                     setInvitationDialogOpen(true);
                   }}
-                  disabled={!username || !userProfile?.labMemberships?.some((membership: any) => membership.roleInLab === 'Lab PI')}
+                  disabled={!username || !userProfile?.labMemberships?.some((membership: any) => membership.isActive)}
                   title={!username ? 'Please login to send invitations' : 
-                         !userProfile?.labMemberships?.some((membership: any) => membership.roleInLab === 'Lab PI') ? 'Only Lab PIs can send lab invitations' : 
+                         !userProfile?.labMemberships?.some((membership: any) => membership.isActive) ? 'You need to be a lab member to send invitations' : 
                          'Send lab invitation'}
                 >
                   Invite to Lab
@@ -1250,11 +1468,15 @@ const MembershipManagementPage: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                 <Box>
                   <Typography variant="h6">Team Invitations</Typography>
-                  {!username && (
+                  {!username ? (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                       Please login to send team invitations. All team members can invite others, but invitations require Leader approval.
                     </Typography>
-                  )}
+                  ) : !userProfile?.teamMemberships?.some((membership: any) => membership.isActive) ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      You need to be a member of at least one team to send team invitations.
+                    </Typography>
+                  ) : null}
                 </Box>
                 <Button 
                   variant="contained" 
@@ -1262,12 +1484,133 @@ const MembershipManagementPage: React.FC = () => {
                     setInvitationTabValue(1); // Set to team invitation
                     setInvitationDialogOpen(true);
                   }}
-                  disabled={!username}
-                  title={!username ? 'Please login to send invitations' : 'Send team invitation'}
+                  disabled={!username || !userProfile?.teamMemberships?.some((membership: any) => membership.isActive)}
+                  title={!username ? 'Please login to send invitations' : 
+                         !userProfile?.teamMemberships?.some((membership: any) => membership.isActive) ? 'You need to be a team member to send invitations' : 
+                         'Send team invitation'}
                 >
                   Invite to Team
                 </Button>
               </Box>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Manage Members */}
+      {tabValue === 5 && (
+        <Box>
+          <Typography variant="h6" sx={{ mb: 2 }}>Manage Members</Typography>
+          
+          <Tabs value={membershipTabValue} onChange={(_, newValue) => setMembershipTabValue(newValue)} sx={{ mb: 2 }}>
+            <Tab label="Lab Members" />
+            <Tab label="Team Members" />
+          </Tabs>
+          
+          {/* Lab Members Management */}
+          {membershipTabValue === 0 && (
+            <Box>
+              <Typography variant="h6" sx={{ mb: 2 }}>Lab Members Management</Typography>
+              {managedLabs.length === 0 ? (
+                <Alert severity="info">
+                  You are not a Lab PI of any labs. Only Lab PIs can manage lab members.
+                </Alert>
+              ) : (
+                <Grid container spacing={2}>
+                  {managedLabs.map((lab) => (
+                    <Grid item xs={12} md={6} key={lab.id}>
+                      <Card>
+                        <CardContent>
+                          <Typography variant="h6">{lab.labName}</Typography>
+                          <Typography color="textSecondary">Lab ID: {lab.labId}</Typography>
+                          <Button 
+                            variant="outlined" 
+                            size="small"
+                            onClick={() => loadLabMembersForManagement(lab.id)}
+                            sx={{ mt: 1 }}
+                          >
+                            View Members
+                          </Button>
+                          {labMembers.length > 0 && (
+                            <List sx={{ mt: 2 }}>
+                              {labMembers.map((member) => (
+                                <ListItem key={member.username} divider>
+                                  <ListItemText
+                                    primary={member.username}
+                                    secondary={member.email}
+                                  />
+                                  <Button 
+                                    variant="outlined" 
+                                    color="error" 
+                                    size="small"
+                                    onClick={() => openRemoveMemberDialog('lab', member)}
+                                  >
+                                    Remove
+                                  </Button>
+                                </ListItem>
+                              ))}
+                            </List>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
+            </Box>
+          )}
+          
+          {/* Team Members Management */}
+          {membershipTabValue === 1 && (
+            <Box>
+              <Typography variant="h6" sx={{ mb: 2 }}>Team Members Management</Typography>
+              {managedTeams.length === 0 ? (
+                <Alert severity="info">
+                  You are not a Team Leader of any teams. Only Team Leaders can manage team members.
+                </Alert>
+              ) : (
+                <Grid container spacing={2}>
+                  {managedTeams.map((team) => (
+                    <Grid item xs={12} md={6} key={team.id}>
+                      <Card>
+                        <CardContent>
+                          <Typography variant="h6">{team.teamName}</Typography>
+                          <Typography color="textSecondary">Team ID: {team.teamId}</Typography>
+                          <Typography color="textSecondary">Lab: {team.labName}</Typography>
+                          <Button 
+                            variant="outlined" 
+                            size="small"
+                            onClick={() => loadTeamMembersForManagement(team.id)}
+                            sx={{ mt: 1 }}
+                          >
+                            View Members
+                          </Button>
+                          {teamMembers.length > 0 && (
+                            <List sx={{ mt: 2 }}>
+                              {teamMembers.map((member) => (
+                                <ListItem key={member.username} divider>
+                                  <ListItemText
+                                    primary={member.username}
+                                    secondary={member.email}
+                                  />
+                                  <Button 
+                                    variant="outlined" 
+                                    color="error" 
+                                    size="small"
+                                    onClick={() => openRemoveMemberDialog('team', member)}
+                                  >
+                                    Remove
+                                  </Button>
+                                </ListItem>
+                              ))}
+                            </List>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
             </Box>
           )}
         </Box>
@@ -1290,7 +1633,7 @@ const MembershipManagementPage: React.FC = () => {
             >
               {(applicationTabValue === 0 ? labs : teams).map((item) => (
                 <MenuItem key={item.id} value={item.id}>
-                  {applicationTabValue === 0 ? item.labName : item.teamName}
+                  {applicationTabValue === 0 ? (item as Lab).labName : (item as Team).teamName}
                 </MenuItem>
               ))}
             </Select>
@@ -1364,7 +1707,7 @@ const MembershipManagementPage: React.FC = () => {
               {(invitationTabValue === 0 ? userLabs : userTeams).length > 0 ? (
                 (invitationTabValue === 0 ? userLabs : userTeams).map((item) => (
                   <MenuItem key={item.id} value={item.id}>
-                    {invitationTabValue === 0 ? item.labName : item.teamName}
+                    {invitationTabValue === 0 ? (item as Lab).labName : (item as Team).teamName}
                   </MenuItem>
                 ))
               ) : (
@@ -1584,6 +1927,40 @@ const MembershipManagementPage: React.FC = () => {
             disabled={leaveType === 'team' && currentUserRole === 'Team Leader' && !newLeaderUsername}
           >
             Leave {leaveType === 'lab' ? 'Lab' : 'Team'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Remove Member Dialog */}
+      <Dialog open={removeMemberDialogOpen} onClose={() => {
+        setRemoveMemberDialogOpen(false);
+        setRemoveMemberForm({ username: '', labName: '', teamName: '' });
+        setSelectedMemberToRemove(null);
+      }} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Remove Member from {removeMemberType === 'lab' ? 'Lab' : 'Team'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to remove <strong>{removeMemberForm.username}</strong> from{' '}
+            <strong>{removeMemberType === 'lab' ? removeMemberForm.labName : removeMemberForm.teamName}</strong>?
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            This action cannot be undone. The user will lose access to all resources associated with this {removeMemberType}.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setRemoveMemberDialogOpen(false);
+            setRemoveMemberForm({ username: '', labName: '', teamName: '' });
+            setSelectedMemberToRemove(null);
+          }}>Cancel</Button>
+          <Button 
+            onClick={handleRemoveMember} 
+            variant="contained" 
+            color="error"
+          >
+            Remove Member
           </Button>
         </DialogActions>
       </Dialog>

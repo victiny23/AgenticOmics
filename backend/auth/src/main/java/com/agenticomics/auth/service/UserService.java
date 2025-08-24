@@ -472,6 +472,52 @@ public class UserService {
         return userOpt.isPresent() && "Lab PI".equals(userOpt.get().getRole());
     }
     
+
+    
+    public boolean canRemoveLabMember(String adminUsername, String targetUsername, String labName) {
+        Optional<User> adminOpt = userRepository.findActiveUserByUsername(adminUsername);
+        if (adminOpt.isEmpty()) {
+            return false;
+        }
+        
+        User admin = adminOpt.get();
+        
+        // Super Admin can remove anyone from any lab
+        if ("Super Admin".equals(admin.getRole())) {
+            return true;
+        }
+        
+        // Lab PI can only remove members from their own lab
+        if ("Lab PI".equals(admin.getRole())) {
+            // Check if the admin is a PI of the specified lab
+            return labService.isUserLabPI(admin.getId(), labService.getLabByName(labName).getId());
+        }
+        
+        return false;
+    }
+    
+    public boolean canRemoveTeamMember(String adminUsername, String targetUsername, String teamName) {
+        Optional<User> adminOpt = userRepository.findActiveUserByUsername(adminUsername);
+        if (adminOpt.isEmpty()) {
+            return false;
+        }
+        
+        User admin = adminOpt.get();
+        
+        // Super Admin can remove anyone from any team
+        if ("Super Admin".equals(admin.getRole())) {
+            return true;
+        }
+        
+        // Team Leader can only remove members from their own team
+        if ("Team Leader".equals(admin.getRole()) || "Lab PI".equals(admin.getRole())) {
+            // Check if the admin is a leader of the specified team
+            return teamService.isUserTeamLeader(admin.getId(), teamService.getTeamByName(teamName).getId());
+        }
+        
+        return false;
+    }
+    
     public boolean canCreateTeam(String username) {
         Optional<User> userOpt = userRepository.findActiveUserByUsername(username);
         if (userOpt.isEmpty()) {

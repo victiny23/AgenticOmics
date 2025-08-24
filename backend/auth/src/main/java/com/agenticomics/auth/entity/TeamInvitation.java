@@ -38,7 +38,7 @@ public class TeamInvitation {
     
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private InvitationStatus status = InvitationStatus.PENDING; // PENDING, ACCEPTED, DECLINED, EXPIRED
+    private InvitationStatus status = InvitationStatus.PENDING_APPROVAL; // Default to needing approval
     
     @Column(name = "responded_at")
     private LocalDateTime respondedAt;
@@ -53,7 +53,8 @@ public class TeamInvitation {
     private LocalDateTime updatedAt;
     
     public enum InvitationStatus {
-        PENDING,
+        PENDING_APPROVAL, // Waiting for Team Leader approval (when sent by regular member)
+        PENDING,          // Waiting for invitee response (after Leader approval or direct from Leader)
         ACCEPTED,
         DECLINED,
         EXPIRED

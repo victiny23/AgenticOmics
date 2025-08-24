@@ -265,6 +265,11 @@ public class TeamService {
                 .collect(Collectors.toList());
     }
     
+    public Team getTeamByName(String teamName) {
+        return teamRepository.findByTeamName(teamName)
+                .orElseThrow(() -> new RuntimeException("Team not found with name: " + teamName));
+    }
+    
     @Transactional
     public void leaveTeam(Long userId, Long teamId, String newLeaderUsername) {
         Optional<UserTeamMembership> membershipOpt = userTeamMembershipRepository

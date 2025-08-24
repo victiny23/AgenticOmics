@@ -234,13 +234,26 @@ public class LabService {
     
     public boolean isUserLabPI(Long userId, Long labId) {
         Optional<UserLabMembership> membership = userLabMembershipRepository.findByUserIdAndLabIdAndIsActiveTrue(userId, labId);
-        return membership.isPresent() && "Lab PI".equals(membership.get().getRoleInLab());
+        boolean isPI = membership.isPresent() && "Lab PI".equals(membership.get().getRoleInLab());
+        
+        System.out.println("🔍 isUserLabPI Debug - User ID: " + userId + 
+                          ", Lab ID: " + labId + 
+                          ", Membership present: " + membership.isPresent() + 
+                          ", Role: " + (membership.isPresent() ? membership.get().getRoleInLab() : "N/A") + 
+                          ", Is PI: " + isPI);
+        
+        return isPI;
     }
     
     public List<Lab> getLabsByUser(Long userId) {
         return userLabMembershipRepository.findByUserIdAndIsActiveTrue(userId).stream()
                 .map(UserLabMembership::getLab)
                 .collect(Collectors.toList());
+    }
+    
+    public Lab getLabByName(String labName) {
+        return labRepository.findByLabName(labName)
+                .orElseThrow(() -> new RuntimeException("Lab not found with name: " + labName));
     }
     
     @Transactional

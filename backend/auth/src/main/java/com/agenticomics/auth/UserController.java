@@ -1263,9 +1263,9 @@ public class UserController {
     @DeleteMapping("/admin/lab-memberships")
     public ResponseEntity<?> removeUserFromLab(@RequestBody RemoveUserFromLabRequest request, @RequestHeader("X-Username") String adminUsername) {
         try {
-            // Check if admin is a Lab PI
-            if (!userService.isUserPI(adminUsername)) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PI users can remove users from labs");
+            // Check if admin has permission to remove the user from the lab
+            if (!userService.canRemoveLabMember(adminUsername, request.getUsername(), request.getLabName())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have permission to remove this user from the lab. Only Lab PIs can remove members from their own lab, and Super Admins can remove anyone from any lab.");
             }
             
             Optional<User> userOpt = userService.findByUsername(request.getUsername());
@@ -1286,6 +1286,35 @@ public class UserController {
             return ResponseEntity.ok("User removed from lab successfully");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to remove user from lab: " + e.getMessage());
+        }
+    }
+    
+    @DeleteMapping("/admin/team-memberships")
+    public ResponseEntity<?> removeUserFromTeam(@RequestBody RemoveUserFromTeamRequest request, @RequestHeader("X-Username") String adminUsername) {
+        try {
+            // Check if admin has permission to remove the user from the team
+            if (!userService.canRemoveTeamMember(adminUsername, request.getUsername(), request.getTeamName())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You don't have permission to remove this user from the team. Only Team Leaders can remove members from their own team, and Super Admins can remove anyone from any team.");
+            }
+            
+            Optional<User> userOpt = userService.findByUsername(request.getUsername());
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            Optional<Team> teamOpt = teamService.getAllTeams().stream()
+                    .filter(team -> team.getTeamName().equals(request.getTeamName()))
+                    .findFirst()
+                    .map(teamDto -> teamRepository.findById(teamDto.getId()).orElse(null));
+            
+            if (teamOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Team not found");
+            }
+            
+            teamService.removeUserFromTeam(userOpt.get().getId(), teamOpt.get().getId());
+            return ResponseEntity.ok("User removed from team successfully");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to remove user from team: " + e.getMessage());
         }
     }
     
@@ -1932,6 +1961,17 @@ public class UserController {
         public void setUsername(String username) { this.username = username; }
         public String getLabName() { return labName; }
         public void setLabName(String labName) { this.labName = labName; }
+    }
+    
+    static class RemoveUserFromTeamRequest {
+        private String username;
+        private String teamName;
+        
+        // Getters and setters
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+        public String getTeamName() { return teamName; }
+        public void setTeamName(String teamName) { this.teamName = teamName; }
     }
 
     // Request/Response classes for team management
@@ -3120,7 +3160,7 @@ public class UserController {
     // ========================================
     
     /**
-     * Invite a user to join a lab (Lab PI only)
+     * Invite a user to join a lab (Any lab member can invite, but requires PI approval)
      */
     @PostMapping("/lab-invitations")
     public ResponseEntity<?> createLabInvitation(@RequestBody Map<String, Object> request, @RequestHeader("X-Username") String username) {
@@ -3196,7 +3236,7 @@ public class UserController {
     // ========================================
     
     /**
-     * Invite a user to join a team (Team Leader only)
+     * Invite a user to join a team (Any team member can invite, but requires Leader approval)
      */
     @PostMapping("/team-invitations")
     public ResponseEntity<?> createTeamInvitation(@RequestBody Map<String, Object> request, @RequestHeader("X-Username") String username) {
@@ -3430,8 +3470,13 @@ public class UserController {
             }
             
             User user = userOpt.get();
-            if (!"Lab PI".equals(user.getRole()) && !"Super Admin".equals(user.getRole())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PIs and Super Admins can view pending approvals");
+            if (!"Super Admin".equals(user.getRole())) {
+                // Check if user is a Lab PI of any lab
+                List<LabDto> allLabs = labService.getAllLabs();
+                boolean isLabPI = allLabs.stream().anyMatch(lab -> labService.isUserLabPI(user.getId(), lab.getId()));
+                if (!isLabPI) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Lab PIs and Super Admins can view pending approvals");
+                }
             }
             
             List<LabInvitationDto> pendingInvitations = invitationService.getPendingLabApprovalsForPI(username);
@@ -3454,8 +3499,13 @@ public class UserController {
             }
             
             User user = userOpt.get();
-            if (!"Team Leader".equals(user.getRole()) && !"Super Admin".equals(user.getRole())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Team Leaders and Super Admins can view pending approvals");
+            if (!"Super Admin".equals(user.getRole())) {
+                // Check if user is a Team Leader of any team
+                List<TeamDto> allTeams = teamService.getAllTeams();
+                boolean isTeamLeader = allTeams.stream().anyMatch(team -> teamService.isUserTeamLeader(user.getId(), team.getId()));
+                if (!isTeamLeader) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Team Leaders and Super Admins can view pending approvals");
+                }
             }
             
             List<TeamInvitationDto> pendingInvitations = invitationService.getPendingTeamApprovalsForLeader(username);

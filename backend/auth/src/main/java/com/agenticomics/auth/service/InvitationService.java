@@ -43,9 +43,23 @@ public class InvitationService {
     @Transactional
     public LabInvitationDto createLabInvitation(String invitedUsername, Long labId, String invitedRole, 
                                                String invitationMessage, String invitedByUsername) {
+        System.out.println("🔍 createLabInvitation Debug - invitedUsername: " + invitedUsername + 
+                          ", labId: " + labId + ", invitedRole: " + invitedRole + 
+                          ", invitedByUsername: " + invitedByUsername);
+        
         // Check if invited user exists
+        System.out.println("🔍 Looking up user with username: '" + invitedUsername + "'");
         Optional<User> invitedUserOpt = userRepository.findByUsername(invitedUsername);
+        System.out.println("🔍 User lookup result for '" + invitedUsername + "': " + 
+                          (invitedUserOpt.isPresent() ? "FOUND" : "NOT FOUND"));
+        
         if (invitedUserOpt.isEmpty()) {
+            // Try to find all users to see what's in the database
+            List<User> allUsers = userRepository.findAll();
+            System.out.println("🔍 All users in database:");
+            for (User user : allUsers) {
+                System.out.println("  - Username: '" + user.getUsername() + "', ID: " + user.getId());
+            }
             throw new RuntimeException("Invited user not found: " + invitedUsername);
         }
         
@@ -54,6 +68,8 @@ public class InvitationService {
         if (labOpt.isEmpty()) {
             throw new RuntimeException("Lab not found with ID: " + labId);
         }
+        
+        System.out.println("🔍 Lab found: " + labOpt.get().getLabName() + " (ID: " + labId + ")");
         
         // Check if inviter exists
         Optional<User> inviterOpt = userRepository.findByUsername(invitedByUsername);
@@ -75,11 +91,27 @@ public class InvitationService {
             throw new RuntimeException("User is already a member of this lab");
         }
         
-        // Check if there's already a pending invitation
-        Optional<LabInvitation> existingInvitation = labInvitationRepository
+        // Check if there's already a pending invitation (either pending approval or pending response)
+        Optional<LabInvitation> existingPendingInvitation = labInvitationRepository
             .findByInvitedUsernameAndLabIdAndStatus(invitedUsername, labId, LabInvitation.InvitationStatus.PENDING);
-        if (existingInvitation.isPresent()) {
+        Optional<LabInvitation> existingPendingApprovalInvitation = labInvitationRepository
+            .findByInvitedUsernameAndLabIdAndStatus(invitedUsername, labId, LabInvitation.InvitationStatus.PENDING_APPROVAL);
+        
+        if (existingPendingInvitation.isPresent() || existingPendingApprovalInvitation.isPresent()) {
             throw new RuntimeException("User already has a pending invitation for this lab");
+        }
+        
+        // Check for ANY existing invitation to this lab (for debugging)
+        List<LabInvitation> allExistingInvitations = labInvitationRepository.findByInvitedUsernameAndLabId(invitedUsername, labId);
+        if (!allExistingInvitations.isEmpty()) {
+            System.out.println("🔍 Found existing invitations for " + invitedUsername + " to lab " + labId + ":");
+            for (LabInvitation existing : allExistingInvitations) {
+                System.out.println("  - ID: " + existing.getId() + ", Status: " + existing.getStatus() + 
+                                 ", Created: " + existing.getCreatedAt());
+            }
+            // Delete existing invitations to avoid constraint violation
+            System.out.println("🔍 Deleting existing invitations to avoid constraint violation");
+            labInvitationRepository.deleteAll(allExistingInvitations);
         }
         
         // Create the invitation
@@ -89,8 +121,33 @@ public class InvitationService {
         invitation.setInvitedBy(inviter);
         invitation.setInvitedRole(invitedRole);
         invitation.setInvitationMessage(invitationMessage);
-        invitation.setStatus(LabInvitation.InvitationStatus.PENDING);
+        
+        // Set initial status based on inviter's role
+        boolean isSuperAdmin = "Super Admin".equals(inviter.getRole());
+        boolean isLabPI = labService.isUserLabPI(inviter.getId(), labId);
+        
+        System.out.println("🔍 Invitation Debug - Inviter: " + inviter.getUsername() + 
+                          ", Role: " + inviter.getRole() + 
+                          ", Is Super Admin: " + isSuperAdmin + 
+                          ", Is Lab PI: " + isLabPI + 
+                          ", Lab ID: " + labId);
+        
+        if (isSuperAdmin || isLabPI) {
+            // PI or Super Admin can send direct invitations
+            invitation.setStatus(LabInvitation.InvitationStatus.PENDING);
+            System.out.println("🔍 Setting invitation status to PENDING");
+        } else {
+            // Regular members need PI approval first
+            invitation.setStatus(LabInvitation.InvitationStatus.PENDING_APPROVAL);
+            System.out.println("🔍 Setting invitation status to PENDING_APPROVAL");
+        }
+        
         invitation.setExpiresAt(LocalDateTime.now().plusDays(7)); // 7 days expiration
+        
+        System.out.println("🔍 About to save invitation - invitedUser: " + 
+                          (invitation.getInvitedUser() != null ? invitation.getInvitedUser().getUsername() : "NULL") +
+                          ", lab: " + (invitation.getLab() != null ? invitation.getLab().getLabName() : "NULL") +
+                          ", invitedBy: " + (invitation.getInvitedBy() != null ? invitation.getInvitedBy().getUsername() : "NULL"));
         
         LabInvitation savedInvitation = labInvitationRepository.save(invitation);
         return LabInvitationDto.fromEntity(savedInvitation);
@@ -196,10 +253,13 @@ public class InvitationService {
             throw new RuntimeException("User is already a member of this team");
         }
         
-        // Check if there's already a pending invitation
-        Optional<TeamInvitation> existingInvitation = teamInvitationRepository
+        // Check if there's already a pending invitation (either pending approval or pending response)
+        Optional<TeamInvitation> existingPendingInvitation = teamInvitationRepository
             .findByInvitedUsernameAndTeamIdAndStatus(invitedUsername, teamId, TeamInvitation.InvitationStatus.PENDING);
-        if (existingInvitation.isPresent()) {
+        Optional<TeamInvitation> existingPendingApprovalInvitation = teamInvitationRepository
+            .findByInvitedUsernameAndTeamIdAndStatus(invitedUsername, teamId, TeamInvitation.InvitationStatus.PENDING_APPROVAL);
+        
+        if (existingPendingInvitation.isPresent() || existingPendingApprovalInvitation.isPresent()) {
             throw new RuntimeException("User already has a pending invitation for this team");
         }
         
@@ -210,7 +270,16 @@ public class InvitationService {
         invitation.setInvitedBy(inviter);
         invitation.setInvitedRole(invitedRole);
         invitation.setInvitationMessage(invitationMessage);
-        invitation.setStatus(TeamInvitation.InvitationStatus.PENDING);
+        
+        // Set initial status based on inviter's role
+        if ("Super Admin".equals(inviter.getRole()) || teamService.isUserTeamLeader(inviter.getId(), teamId)) {
+            // Team Leader or Super Admin can send direct invitations
+            invitation.setStatus(TeamInvitation.InvitationStatus.PENDING);
+        } else {
+            // Regular members need Team Leader approval first
+            invitation.setStatus(TeamInvitation.InvitationStatus.PENDING_APPROVAL);
+        }
+        
         invitation.setExpiresAt(LocalDateTime.now().plusDays(7)); // 7 days expiration
         
         TeamInvitation savedInvitation = teamInvitationRepository.save(invitation);
@@ -313,17 +382,19 @@ public class InvitationService {
         List<LabInvitation> pendingInvitations = new ArrayList<>();
         
         if ("Super Admin".equals(pi.getRole())) {
-            // Super Admin can see all pending lab invitations
+            // Super Admin can see all pending lab invitations (both PENDING and PENDING_APPROVAL)
             List<LabInvitation> allInvitations = labInvitationRepository.findAll();
             pendingInvitations = allInvitations.stream()
-                .filter(inv -> inv.getStatus() == LabInvitation.InvitationStatus.PENDING)
+                .filter(inv -> inv.getStatus() == LabInvitation.InvitationStatus.PENDING || 
+                              inv.getStatus() == LabInvitation.InvitationStatus.PENDING_APPROVAL)
                 .collect(Collectors.toList());
         } else {
-            // Lab PI can only see pending invitations for labs they lead
+            // Lab PI can only see pending invitations for labs they lead (both PENDING and PENDING_APPROVAL)
             // For now, we'll get all pending invitations and filter by lab membership
             List<LabInvitation> allInvitations = labInvitationRepository.findAll();
             pendingInvitations = allInvitations.stream()
-                .filter(inv -> inv.getStatus() == LabInvitation.InvitationStatus.PENDING)
+                .filter(inv -> inv.getStatus() == LabInvitation.InvitationStatus.PENDING || 
+                              inv.getStatus() == LabInvitation.InvitationStatus.PENDING_APPROVAL)
                 .filter(inv -> labService.isUserLabPI(pi.getId(), inv.getLab().getId()))
                 .collect(Collectors.toList());
         }
@@ -346,17 +417,19 @@ public class InvitationService {
         List<TeamInvitation> pendingInvitations = new ArrayList<>();
         
         if ("Super Admin".equals(leader.getRole())) {
-            // Super Admin can see all pending team invitations
+            // Super Admin can see all pending team invitations (both PENDING and PENDING_APPROVAL)
             List<TeamInvitation> allInvitations = teamInvitationRepository.findAll();
             pendingInvitations = allInvitations.stream()
-                .filter(inv -> inv.getStatus() == TeamInvitation.InvitationStatus.PENDING)
+                .filter(inv -> inv.getStatus() == TeamInvitation.InvitationStatus.PENDING || 
+                              inv.getStatus() == TeamInvitation.InvitationStatus.PENDING_APPROVAL)
                 .collect(Collectors.toList());
         } else {
-            // Team Leader can only see pending invitations for teams they lead
+            // Team Leader can only see pending invitations for teams they lead (both PENDING and PENDING_APPROVAL)
             // For now, we'll get all pending invitations and filter by team membership
             List<TeamInvitation> allInvitations = teamInvitationRepository.findAll();
             pendingInvitations = allInvitations.stream()
-                .filter(inv -> inv.getStatus() == TeamInvitation.InvitationStatus.PENDING)
+                .filter(inv -> inv.getStatus() == TeamInvitation.InvitationStatus.PENDING || 
+                              inv.getStatus() == TeamInvitation.InvitationStatus.PENDING_APPROVAL)
                 .filter(inv -> teamService.isUserTeamLeader(leader.getId(), inv.getTeam().getId()))
                 .collect(Collectors.toList());
         }
@@ -389,17 +462,24 @@ public class InvitationService {
             throw new RuntimeException("Only Lab PI or Super Admin can approve invitations");
         }
         
-        // Check if invitation is still pending
-        if (invitation.getStatus() != LabInvitation.InvitationStatus.PENDING) {
+        // Check if invitation is pending approval or pending response
+        if (invitation.getStatus() != LabInvitation.InvitationStatus.PENDING && 
+            invitation.getStatus() != LabInvitation.InvitationStatus.PENDING_APPROVAL) {
             throw new RuntimeException("Invitation has already been processed");
         }
         
         // Update the invitation status
         if ("APPROVED".equals(status)) {
-            invitation.setStatus(LabInvitation.InvitationStatus.ACCEPTED);
-            // Add user to lab
-            labService.addUserToLab(invitation.getInvitedUser().getId(), invitation.getLab().getId(), 
-                                  invitation.getInvitedRole(), null, null, false);
+            if (invitation.getStatus() == LabInvitation.InvitationStatus.PENDING_APPROVAL) {
+                // Change from PENDING_APPROVAL to PENDING (invitee can now respond)
+                invitation.setStatus(LabInvitation.InvitationStatus.PENDING);
+            } else {
+                // Direct approval (if PI approves a PENDING invitation)
+                invitation.setStatus(LabInvitation.InvitationStatus.ACCEPTED);
+                // Add user to lab
+                labService.addUserToLab(invitation.getInvitedUser().getId(), invitation.getLab().getId(), 
+                                      invitation.getInvitedRole(), null, null, false);
+            }
         } else if ("REJECTED".equals(status)) {
             invitation.setStatus(LabInvitation.InvitationStatus.DECLINED);
         } else {
@@ -434,17 +514,24 @@ public class InvitationService {
             throw new RuntimeException("Only Team Leader or Super Admin can approve invitations");
         }
         
-        // Check if invitation is still pending
-        if (invitation.getStatus() != TeamInvitation.InvitationStatus.PENDING) {
+        // Check if invitation is pending approval or pending response
+        if (invitation.getStatus() != TeamInvitation.InvitationStatus.PENDING && 
+            invitation.getStatus() != TeamInvitation.InvitationStatus.PENDING_APPROVAL) {
             throw new RuntimeException("Invitation has already been processed");
         }
         
         // Update the invitation status
         if ("APPROVED".equals(status)) {
-            invitation.setStatus(TeamInvitation.InvitationStatus.ACCEPTED);
-            // Add user to team
-            teamService.addUserToTeam(invitation.getInvitedUser().getId(), invitation.getTeam().getId(), 
-                                    invitation.getInvitedRole(), null, null, false);
+            if (invitation.getStatus() == TeamInvitation.InvitationStatus.PENDING_APPROVAL) {
+                // Change from PENDING_APPROVAL to PENDING (invitee can now respond)
+                invitation.setStatus(TeamInvitation.InvitationStatus.PENDING);
+            } else {
+                // Direct approval (if Leader approves a PENDING invitation)
+                invitation.setStatus(TeamInvitation.InvitationStatus.ACCEPTED);
+                // Add user to team
+                teamService.addUserToTeam(invitation.getInvitedUser().getId(), invitation.getTeam().getId(), 
+                                        invitation.getInvitedRole(), null, null, false);
+            }
         } else if ("REJECTED".equals(status)) {
             invitation.setStatus(TeamInvitation.InvitationStatus.DECLINED);
         } else {

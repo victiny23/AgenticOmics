@@ -38,7 +38,7 @@ public class LabInvitation {
     
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private InvitationStatus status = InvitationStatus.PENDING; // PENDING, ACCEPTED, DECLINED, EXPIRED
+    private InvitationStatus status = InvitationStatus.PENDING_APPROVAL; // Default to needing approval
     
     @Column(name = "responded_at")
     private LocalDateTime respondedAt;
@@ -53,7 +53,8 @@ public class LabInvitation {
     private LocalDateTime updatedAt;
     
     public enum InvitationStatus {
-        PENDING,
+        PENDING_APPROVAL, // Waiting for PI approval (when sent by regular member)
+        PENDING,          // Waiting for invitee response (after PI approval or direct from PI)
         ACCEPTED,
         DECLINED,
         EXPIRED
