@@ -23,7 +23,14 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Divider
+  Divider,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -198,6 +205,17 @@ const MembershipManagementPage: React.FC = () => {
   const [responseForm, setResponseForm] = useState({
     response: 'ACCEPTED'
   });
+
+  // Unified Management states (for PI and Super Admin)
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [showDeactivated, setShowDeactivated] = useState(true); // Show all users by default
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    user: any | null;
+    action: 'activate' | 'deactivate' | null;
+  }>({ open: false, user: null, action: null });
   
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [selectedInvitation, setSelectedInvitation] = useState<any>(null);
@@ -237,11 +255,46 @@ const MembershipManagementPage: React.FC = () => {
     const tabParam = searchParams.get('tab');
     if (tabParam) {
       const tabIndex = parseInt(tabParam);
-      if (tabIndex >= 0 && tabIndex <= 4) {
+      // Super Admin has more tabs (0-8), others have fewer tabs (0-5)
+      const maxTabs = role === 'Super Admin' ? 8 : 5;
+      if (tabIndex >= 0 && tabIndex <= maxTabs) {
         setTabValue(tabIndex);
       }
     }
-  }, [searchParams]);
+  }, [searchParams, role]);
+
+  // Load unified management data when tab changes to unified management tabs
+  useEffect(() => {
+    if (role === 'Super Admin' && tabValue >= 6) {
+      // Load data for Super Admin unified management tabs (User Management, Lab Overview, Team Overview)
+      if (tabValue === 6) { // User Management tab
+        loadAllUsersForManagement();
+      } else if (tabValue === 7) { // Lab Overview tab
+        loadManagedLabsAndTeams();
+        // Clear any existing member data to show fresh data
+        setLabMembers([]);
+        setTeamMembers([]);
+      } else if (tabValue === 8) { // Team Overview tab
+        loadManagedLabsAndTeams();
+        // Clear any existing member data to show fresh data
+        setLabMembers([]);
+        setTeamMembers([]);
+      }
+    }
+  }, [tabValue, role]);
+
+  // Load data for Manage Members tab (for both PI/Team Leader and Super Admin)
+  useEffect(() => {
+    if (tabValue === 5) {
+      // Load managed labs and teams for both roles
+      loadManagedLabsAndTeams();
+      
+      // Load users for Super Admin's Organization Users tab
+      if (role === 'Super Admin' && membershipTabValue === 2) {
+        loadAllUsersForManagement();
+      }
+    }
+  }, [tabValue, membershipTabValue, role]);
 
   const loadData = async () => {
     try {
@@ -587,6 +640,75 @@ const MembershipManagementPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error getting user role in lab:', error);
+    }
+  };
+
+  // Unified Management functions (for PI and Super Admin)
+  const loadAllUsersForManagement = async () => {
+    if (!token) return;
+    
+    try {
+      // Use different endpoints based on user role
+      const endpoint = role === 'Super Admin' 
+        ? '/api/auth/admin/system/users' 
+        : '/api/auth/admin/users';
+      
+      const response = await fetch(endpoint, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || ''
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Handle different response formats
+        if (Array.isArray(data)) {
+          // Super Admin endpoint returns array directly
+          setAllUsers(data);
+        } else {
+          // Lab PI endpoint returns {users: [...]}
+          setAllUsers(data.users || []);
+        }
+      } else {
+        console.error('Failed to load users:', response.status, response.statusText);
+        setError('Failed to load users');
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setError('Failed to load users');
+    }
+  };
+
+  const handleUserAction = async (user: any, action: 'activate' | 'deactivate') => {
+    if (!token) return;
+    
+    try {
+      // Use different endpoints based on user role
+      const endpoint = role === 'Super Admin' 
+        ? `/api/auth/admin/system/users/${user.id}/${action}`
+        : `/api/auth/admin/users/${user.id}/${action}`;
+      
+      const response = await fetch(endpoint, {
+        method: 'POST', // Both Super Admin and Lab PI endpoints use POST
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || '',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        setSuccess(`User ${user.username} ${action}d successfully`);
+        loadAllUsersForManagement();
+      } else {
+        const errorText = await response.text();
+        console.error(`Failed to ${action} user:`, response.status, errorText);
+        setError(`Failed to ${action} user: ${errorText}`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing user:`, error);
+      setError(`Failed to ${action} user`);
     }
   };
   
@@ -944,6 +1066,27 @@ const MembershipManagementPage: React.FC = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
+  const isExpired = (dateString: string) => {
+    return new Date(dateString) < new Date();
+  };
+
+  const getExpirationText = (dateString: string) => {
+    const expirationDate = new Date(dateString);
+    const now = new Date();
+    const diffTime = expirationDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return `Expired ${Math.abs(diffDays)} days ago`;
+    } else if (diffDays === 0) {
+      return 'Expires today';
+    } else if (diffDays === 1) {
+      return 'Expires tomorrow';
+    } else {
+      return `Expires in ${diffDays} days`;
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>
@@ -960,6 +1103,13 @@ const MembershipManagementPage: React.FC = () => {
         <Tab label="My Memberships" />
         <Tab label="Send Invitations" />
         <Tab label="Manage Members" />
+        {role === 'Super Admin' && (
+          <>
+            <Tab label="User Management" />
+            <Tab label="Lab Overview" />
+            <Tab label="Team Overview" />
+          </>
+        )}
       </Tabs>
 
       {/* My Applications - Lab and Team Requests */}
@@ -1085,15 +1235,23 @@ const MembershipManagementPage: React.FC = () => {
                         Message: {invitation.invitationMessage}
                       </Typography>
                     )}
-                    <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                      Expires: {formatDate(invitation.expiresAt)}
+                    <Typography 
+                      variant="caption" 
+                      display="block" 
+                      sx={{ 
+                        mt: 1,
+                        color: isExpired(invitation.expiresAt) ? 'error.main' : 'text.secondary',
+                        fontWeight: isExpired(invitation.expiresAt) ? 'bold' : 'normal'
+                      }}
+                    >
+                      {getExpirationText(invitation.expiresAt)}
                     </Typography>
                     {invitation.status === 'PENDING_APPROVAL' && (
                       <Alert severity="info" sx={{ mt: 2 }}>
                         This invitation is waiting for PI approval before you can respond.
                       </Alert>
                     )}
-                    {invitation.status === 'PENDING' && (
+                    {invitation.status === 'PENDING' && !isExpired(invitation.expiresAt) && (
                       <Box sx={{ mt: 2 }}>
                         <Button 
                           variant="contained" 
@@ -1121,6 +1279,11 @@ const MembershipManagementPage: React.FC = () => {
                           Decline
                         </Button>
                       </Box>
+                    )}
+                    {invitation.status === 'PENDING' && isExpired(invitation.expiresAt) && (
+                      <Alert severity="warning" sx={{ mt: 2 }}>
+                        This invitation has expired and can no longer be responded to.
+                      </Alert>
                     )}
                   </CardContent>
                 </Card>
@@ -1160,15 +1323,23 @@ const MembershipManagementPage: React.FC = () => {
                         Message: {invitation.invitationMessage}
                       </Typography>
                     )}
-                    <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                      Expires: {formatDate(invitation.expiresAt)}
+                    <Typography 
+                      variant="caption" 
+                      display="block" 
+                      sx={{ 
+                        mt: 1,
+                        color: isExpired(invitation.expiresAt) ? 'error.main' : 'text.secondary',
+                        fontWeight: isExpired(invitation.expiresAt) ? 'bold' : 'normal'
+                      }}
+                    >
+                      {getExpirationText(invitation.expiresAt)}
                     </Typography>
                     {invitation.status === 'PENDING_APPROVAL' && (
                       <Alert severity="info" sx={{ mt: 2 }}>
                         This invitation is waiting for Team Leader approval before you can respond.
                       </Alert>
                     )}
-                    {invitation.status === 'PENDING' && (
+                    {invitation.status === 'PENDING' && !isExpired(invitation.expiresAt) && (
                       <Box sx={{ mt: 2 }}>
                         <Button 
                           variant="contained" 
@@ -1196,6 +1367,11 @@ const MembershipManagementPage: React.FC = () => {
                           Decline
                         </Button>
                       </Box>
+                    )}
+                    {invitation.status === 'PENDING' && isExpired(invitation.expiresAt) && (
+                      <Alert severity="warning" sx={{ mt: 2 }}>
+                        This invitation has expired and can no longer be responded to.
+                      </Alert>
                     )}
                   </CardContent>
                 </Card>
@@ -1233,8 +1409,16 @@ const MembershipManagementPage: React.FC = () => {
                             Message: {invitation.invitationMessage}
                           </Typography>
                         )}
-                        <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                          Expires: {formatDate(invitation.expiresAt)}
+                        <Typography 
+                          variant="caption" 
+                          display="block" 
+                          sx={{ 
+                            mt: 1,
+                            color: isExpired(invitation.expiresAt) ? 'error.main' : 'text.secondary',
+                            fontWeight: isExpired(invitation.expiresAt) ? 'bold' : 'normal'
+                          }}
+                        >
+                          {getExpirationText(invitation.expiresAt)}
                         </Typography>
                         {(invitation.status === 'PENDING' || invitation.status === 'PENDING_APPROVAL') && (
                           <Box sx={{ mt: 2 }}>
@@ -1291,8 +1475,16 @@ const MembershipManagementPage: React.FC = () => {
                             Message: {invitation.invitationMessage}
                           </Typography>
                         )}
-                        <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                          Expires: {formatDate(invitation.expiresAt)}
+                        <Typography 
+                          variant="caption" 
+                          display="block" 
+                          sx={{ 
+                            mt: 1,
+                            color: isExpired(invitation.expiresAt) ? 'error.main' : 'text.secondary',
+                            fontWeight: isExpired(invitation.expiresAt) ? 'bold' : 'normal'
+                          }}
+                        >
+                          {getExpirationText(invitation.expiresAt)}
                         </Typography>
                         {(invitation.status === 'PENDING' || invitation.status === 'PENDING_APPROVAL') && (
                           <Box sx={{ mt: 2 }}>
@@ -1497,14 +1689,382 @@ const MembershipManagementPage: React.FC = () => {
         </Box>
       )}
 
-      {/* Manage Members */}
+      {/* User Management (Platform-wide for Super Admin) */}
+      {tabValue === 6 && role === 'Super Admin' && (
+        <Box>
+          <Typography variant="h6" sx={{ mb: 2 }}>Platform User Management</Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+            Manage all users across the entire platform. You can activate or deactivate any user account.
+            {!showDeactivated && (
+              <Alert severity="info" sx={{ mt: 1 }}>
+                <Typography variant="body2">
+                  <strong>Note:</strong> Currently showing only active users. Use the "Status Filter" to view all users including deactivated ones.
+                </Typography>
+              </Alert>
+            )}
+          </Typography>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h6">All Platform Users</Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Chip 
+                label={`${allUsers.filter(user => user.isActive).length} Active`}
+                color="success"
+                variant="outlined"
+              />
+              <Chip 
+                label={`${allUsers.filter(user => !user.isActive).length} Inactive`}
+                color="error"
+                variant="outlined"
+              />
+              <Chip 
+                label={`${allUsers
+                  .filter(user => 
+                    userSearchTerm === '' || 
+                    user.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+                    user.email.toLowerCase().includes(userSearchTerm.toLowerCase())
+                  )
+                  .filter(user => userRoleFilter === 'all' || user.role === userRoleFilter)
+                  .length} Total`}
+                color="primary"
+                variant="outlined"
+              />
+            </Box>
+          </Box>
+          
+          {/* Search and Filter Controls */}
+          <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+            <TextField
+              label="Search users"
+              variant="outlined"
+              size="small"
+              value={userSearchTerm}
+              onChange={(e) => setUserSearchTerm(e.target.value)}
+              placeholder="Search by username or email..."
+              sx={{ minWidth: 250 }}
+            />
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Filter by Role</InputLabel>
+              <Select
+                value={userRoleFilter}
+                onChange={(e) => setUserRoleFilter(e.target.value)}
+                label="Filter by Role"
+              >
+                <MenuItem value="all">All Roles</MenuItem>
+                <MenuItem value="Super Admin">Super Admin</MenuItem>
+                <MenuItem value="Lab PI">Lab PI</MenuItem>
+                <MenuItem value="Team Leader">Team Leader</MenuItem>
+                <MenuItem value="Member">Member</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Status Filter</InputLabel>
+              <Select
+                value={showDeactivated ? 'all' : 'active'}
+                onChange={(e) => setShowDeactivated(e.target.value === 'all')}
+                label="Status Filter"
+              >
+                <MenuItem value="all">All Users</MenuItem>
+                <MenuItem value="active">Active Only</MenuItem>
+              </Select>
+            </FormControl>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                setUserSearchTerm('');
+                setUserRoleFilter('all');
+                setShowDeactivated(true);
+              }}
+            >
+              Clear Filters
+            </Button>
+          </Box>
+          
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Username</strong></TableCell>
+                  <TableCell><strong>Email</strong></TableCell>
+                  <TableCell><strong>Role</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                  <TableCell><strong>Created</strong></TableCell>
+                  <TableCell><strong>Last Login</strong></TableCell>
+                  <TableCell><strong>Actions</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {allUsers
+                  .filter(user => showDeactivated || user.isActive)
+                  .filter(user => 
+                    userSearchTerm === '' || 
+                    user.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+                    user.email.toLowerCase().includes(userSearchTerm.toLowerCase())
+                  )
+                  .filter(user => userRoleFilter === 'all' || user.role === userRoleFilter)
+                  .map((user) => (
+                    <TableRow key={user.id} sx={{ 
+                      backgroundColor: user.isActive ? 'inherit' : 'rgba(255, 0, 0, 0.08)',
+                      '&:hover': { backgroundColor: user.isActive ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 0, 0, 0.12)' },
+                      borderLeft: user.isActive ? 'none' : '4px solid #f44336'
+                    }}>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 'medium',
+                            color: user.isActive ? 'inherit' : 'text.secondary',
+                            textDecoration: user.isActive ? 'none' : 'line-through'
+                          }}>
+                            {user.username}
+                          </Typography>
+                          {user.role === 'Super Admin' && (
+                            <Chip label="Admin" size="small" color="error" />
+                          )}
+                          {!user.isActive && (
+                            <Chip label="DEACTIVATED" size="small" color="error" variant="filled" />
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Typography sx={{ 
+                          color: user.isActive ? 'inherit' : 'text.secondary',
+                          textDecoration: user.isActive ? 'none' : 'line-through'
+                        }}>
+                          {user.email}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={user.role} 
+                          size="small"
+                          color={
+                            user.role === 'Super Admin' ? 'error' :
+                            user.role === 'Lab PI' ? 'primary' :
+                            user.role === 'Team Leader' ? 'secondary' :
+                            'default'
+                          }
+                          variant={user.isActive ? 'filled' : 'outlined'}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Chip 
+                            label={user.isActive ? '🟢 Active' : '🔴 Inactive'} 
+                            color={user.isActive ? 'success' : 'error'} 
+                            size="small"
+                            variant="filled"
+                          />
+                          {user.isActive ? (
+                            <Typography variant="caption" color="success.main">
+                              Can access platform
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" color="error.main">
+                              Cannot access platform
+                            </Typography>
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : 'Never'}
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                          {user.isActive ? (
+                            <Button 
+                              variant="contained" 
+                              color="error" 
+                              size="small"
+                              onClick={() => setConfirmDialog({ open: true, user, action: 'deactivate' })}
+                              disabled={user.role === 'Super Admin' && user.username === username}
+                              startIcon={<span>🚫</span>}
+                            >
+                              Deactivate
+                            </Button>
+                          ) : (
+                            <Button 
+                              variant="contained" 
+                              color="success" 
+                              size="small"
+                              onClick={() => setConfirmDialog({ open: true, user, action: 'activate' })}
+                              startIcon={<span>✅</span>}
+                            >
+                              Activate
+                            </Button>
+                          )}
+                          {user.role === 'Super Admin' && user.username === username && (
+                            <Chip label="Current User" size="small" color="warning" />
+                          )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          {allUsers.length === 0 && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              No users found. Please check your connection or try refreshing the page.
+            </Alert>
+          )}
+        </Box>
+      )}
+
+      {/* Lab Members Management (Unified Management) */}
+      {tabValue === 7 && (role === 'Lab PI' || role === 'Super Admin') && (
+        <Box>
+          <Typography variant="h6" sx={{ mb: 2 }}>Lab Members Overview</Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+            Overview of all labs you manage as PI. Click "View Members" to see detailed member lists.
+          </Typography>
+          {managedLabs.length === 0 ? (
+            <Alert severity="info">
+              You are not a Lab PI of any labs. Only Lab PIs can manage lab members.
+            </Alert>
+          ) : (
+            <>
+              <Card sx={{ mb: 3, bgcolor: 'primary.light', color: 'white' }}>
+                <CardContent>
+                  <Typography variant="h6">Summary</Typography>
+                  <Typography variant="body2">
+                    You are managing {managedLabs.length} lab{managedLabs.length !== 1 ? 's' : ''} as PI
+                  </Typography>
+                </CardContent>
+              </Card>
+              <Grid container spacing={2}>
+              {managedLabs.map((lab) => (
+                <Grid item xs={12} md={6} key={lab.id}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6">{lab.labName}</Typography>
+                      <Typography color="textSecondary">Lab ID: {lab.labId}</Typography>
+                      <Typography color="textSecondary">Description: {lab.labDescription}</Typography>
+                      <Button 
+                        variant="outlined" 
+                        size="small"
+                        onClick={() => loadLabMembersForManagement(lab.id)}
+                        sx={{ mt: 1 }}
+                      >
+                        View Members
+                      </Button>
+                      {labMembers.length > 0 && (
+                        <List sx={{ mt: 2 }}>
+                          {labMembers.map((member) => (
+                            <ListItem key={member.username} divider>
+                              <ListItemText
+                                primary={member.username}
+                                secondary={`${member.email} - ${member.roleInLab || 'Member'}`}
+                              />
+                              <Button 
+                                variant="outlined" 
+                                color="error" 
+                                size="small"
+                                onClick={() => openRemoveMemberDialog('lab', member)}
+                              >
+                                Remove
+                              </Button>
+                            </ListItem>
+                          ))}
+                        </List>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+            </>
+          )}
+        </Box>
+      )}
+
+      {/* Team Members Management (Unified Management) */}
+      {tabValue === 8 && (role === 'Lab PI' || role === 'Super Admin') && (
+        <Box>
+          <Typography variant="h6" sx={{ mb: 2 }}>Team Members Overview</Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+            Overview of all teams you manage as Leader. Click "View Members" to see detailed member lists.
+          </Typography>
+          {managedTeams.length === 0 ? (
+            <Alert severity="info">
+              You are not a Team Leader of any teams. Only Team Leaders can manage team members.
+            </Alert>
+          ) : (
+            <>
+              <Card sx={{ mb: 3, bgcolor: 'secondary.light', color: 'white' }}>
+                <CardContent>
+                  <Typography variant="h6">Summary</Typography>
+                  <Typography variant="body2">
+                    You are managing {managedTeams.length} team{managedTeams.length !== 1 ? 's' : ''} as Leader
+                  </Typography>
+                </CardContent>
+              </Card>
+              <Grid container spacing={2}>
+              {managedTeams.map((team) => (
+                <Grid item xs={12} md={6} key={team.id}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6">{team.teamName}</Typography>
+                      <Typography color="textSecondary">Team ID: {team.teamId}</Typography>
+                      <Typography color="textSecondary">Lab: {team.labName}</Typography>
+                      <Typography color="textSecondary">Description: {team.teamDescription}</Typography>
+                      <Button 
+                        variant="outlined" 
+                        size="small"
+                        onClick={() => loadTeamMembersForManagement(team.id)}
+                        sx={{ mt: 1 }}
+                      >
+                        View Members
+                      </Button>
+                      {teamMembers.length > 0 && (
+                        <List sx={{ mt: 2 }}>
+                          {teamMembers.map((member) => (
+                            <ListItem key={member.username} divider>
+                              <ListItemText
+                                primary={member.username}
+                                secondary={`${member.email} - ${member.roleInTeam || 'Member'}`}
+                              />
+                              <Button 
+                                variant="outlined" 
+                                color="error" 
+                                size="small"
+                                onClick={() => openRemoveMemberDialog('team', member)}
+                              >
+                                Remove
+                              </Button>
+                            </ListItem>
+                          ))}
+                        </List>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+            </>
+          )}
+        </Box>
+      )}
+
+      {/* Manage Members - Unified for PI/Team Leader, Separate for Super Admin */}
       {tabValue === 5 && (
         <Box>
-          <Typography variant="h6" sx={{ mb: 2 }}>Manage Members</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            {role === 'Super Admin' ? 'Member Management' : 'Organization Management'}
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+            {role === 'Super Admin' 
+              ? 'Manage members within your organizations. For platform-wide user management, use the User Management tab.'
+              : 'Manage members within your organizations (labs and teams you lead).'
+            }
+          </Typography>
           
           <Tabs value={membershipTabValue} onChange={(_, newValue) => setMembershipTabValue(newValue)} sx={{ mb: 2 }}>
             <Tab label="Lab Members" />
             <Tab label="Team Members" />
+            {role === 'Super Admin' && <Tab label="Organization Users" />}
           </Tabs>
           
           {/* Lab Members Management */}
@@ -1611,6 +2171,81 @@ const MembershipManagementPage: React.FC = () => {
                   ))}
                 </Grid>
               )}
+            </Box>
+          )}
+
+          {/* Organization Users Management (Super Admin only) */}
+          {membershipTabValue === 2 && role === 'Super Admin' && (
+            <Box>
+              <Typography variant="h6" sx={{ mb: 2 }}>Organization Users Management</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                Manage users within your organizations (labs and teams you lead).
+              </Typography>
+              
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="h6">Organization Users</Typography>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => setShowDeactivated(!showDeactivated)}
+                >
+                  {showDeactivated ? 'Hide' : 'Show'} Deactivated Users
+                </Button>
+              </Box>
+              
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Username</TableCell>
+                      <TableCell>Email</TableCell>
+                      <TableCell>Role</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Created</TableCell>
+                      <TableCell>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {allUsers
+                      .filter(user => showDeactivated || user.isActive)
+                      .map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell>{user.username}</TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>{user.role}</TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={user.isActive ? 'Active' : 'Inactive'} 
+                              color={user.isActive ? 'success' : 'error'} 
+                              size="small" 
+                            />
+                          </TableCell>
+                          <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            {user.isActive ? (
+                              <Button 
+                                variant="outlined" 
+                                color="error" 
+                                size="small"
+                                onClick={() => setConfirmDialog({ open: true, user, action: 'deactivate' })}
+                              >
+                                Deactivate
+                              </Button>
+                            ) : (
+                              <Button 
+                                variant="outlined" 
+                                color="success" 
+                                size="small"
+                                onClick={() => setConfirmDialog({ open: true, user, action: 'activate' })}
+                              >
+                                Activate
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </Box>
           )}
         </Box>
@@ -1961,6 +2596,59 @@ const MembershipManagementPage: React.FC = () => {
             color="error"
           >
             Remove Member
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog for User Actions */}
+      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ open: false, user: null, action: null })}>
+        <DialogTitle>
+          {confirmDialog.action === 'activate' ? 'Activate' : 'Deactivate'} Platform User
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to <strong>{confirmDialog.action}</strong> user <strong>"{confirmDialog.user?.username}"</strong>?
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            {confirmDialog.action === 'activate' 
+              ? 'This will allow the user to access the platform again.'
+              : 'This will prevent the user from accessing the platform until reactivated.'
+            }
+          </Typography>
+          {confirmDialog.user?.role === 'Super Admin' && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                <strong>Warning:</strong> This user is a Super Admin. {confirmDialog.action === 'deactivate' 
+                  ? 'Deactivating a Super Admin will remove their platform-wide administrative privileges.'
+                  : 'Activating a Super Admin will restore their platform-wide administrative privileges.'
+                }
+              </Typography>
+            </Alert>
+          )}
+          {confirmDialog.user?.role === 'Super Admin' && confirmDialog.user?.username === username && confirmDialog.action === 'deactivate' && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                <strong>Critical Warning:</strong> You cannot deactivate your own account. This would lock you out of the platform.
+              </Typography>
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog({ open: false, user: null, action: null })}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              if (confirmDialog.user && confirmDialog.action) {
+                handleUserAction(confirmDialog.user, confirmDialog.action);
+                setConfirmDialog({ open: false, user: null, action: null });
+              }
+            }} 
+            variant="contained"
+            color={confirmDialog.action === 'activate' ? 'success' : 'error'}
+            disabled={confirmDialog.user?.role === 'Super Admin' && confirmDialog.user?.username === username && confirmDialog.action === 'deactivate'}
+          >
+            {confirmDialog.action === 'activate' ? 'Activate' : 'Deactivate'}
           </Button>
         </DialogActions>
       </Dialog>

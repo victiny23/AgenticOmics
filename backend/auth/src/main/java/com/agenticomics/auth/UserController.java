@@ -44,6 +44,7 @@ import com.agenticomics.auth.service.ActivationRequestService;
 import com.agenticomics.auth.entity.ActivationRequest;
 import com.agenticomics.auth.service.MembershipRequestService;
 import com.agenticomics.auth.service.InvitationService;
+import com.agenticomics.auth.service.InvitationExpirationService;
 import com.agenticomics.auth.dto.LabMembershipRequestDto;
 import com.agenticomics.auth.dto.TeamMembershipRequestDto;
 import com.agenticomics.auth.dto.LabInvitationDto;
@@ -105,6 +106,9 @@ public class UserController {
     
     @Autowired
     private InvitationService invitationService;
+    
+    @Autowired
+    private InvitationExpirationService invitationExpirationService;
     
     @Value("${app.upload-dir:./data/uploads/profile-photos}")
     private String uploadDir;
@@ -3552,6 +3556,31 @@ public class UserController {
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+    
+    /**
+     * Manually trigger invitation expiration (for testing purposes)
+     * Only accessible by Super Admin
+     */
+    @PostMapping("/admin/expire-invitations")
+    public ResponseEntity<?> manuallyExpireInvitations(@RequestHeader("X-Username") String username) {
+        try {
+            // Check if user is Super Admin
+            Optional<User> userOpt = userService.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            
+            User user = userOpt.get();
+            if (!"Super Admin".equals(user.getRole())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only Super Admins can manually expire invitations");
+            }
+            
+            invitationExpirationService.manuallyExpireInvitations();
+            return ResponseEntity.ok("Invitation expiration completed successfully");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error expiring invitations: " + e.getMessage());
         }
     }
 }

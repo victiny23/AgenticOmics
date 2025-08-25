@@ -28,7 +28,7 @@ public interface TeamInvitationRepository extends JpaRepository<TeamInvitation, 
     @Query("SELECT i FROM TeamInvitation i WHERE i.invitedUser.username = :username AND i.team.id = :teamId AND i.status = :status")
     Optional<TeamInvitation> findByInvitedUsernameAndTeamIdAndStatus(@Param("username") String username, @Param("teamId") Long teamId, @Param("status") TeamInvitation.InvitationStatus status);
     
-    @Query("SELECT i FROM TeamInvitation i WHERE i.expiresAt < :now AND i.status = 'PENDING'")
+    @Query("SELECT i FROM TeamInvitation i WHERE i.expiresAt < :now AND (i.status = 'PENDING' OR i.status = 'PENDING_APPROVAL')")
     List<TeamInvitation> findExpiredPendingInvitations(@Param("now") LocalDateTime now);
     
     @Query("SELECT COUNT(i) FROM TeamInvitation i WHERE i.invitedUser.username = :username AND i.status = 'PENDING'")

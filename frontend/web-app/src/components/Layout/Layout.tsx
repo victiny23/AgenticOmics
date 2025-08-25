@@ -95,12 +95,7 @@ const navigationItems: NavigationItem[] = [
 
 // Admin navigation items (shown only to Lab PIs, Team Leaders, and Super Admins)
 const adminNavigationItems: NavigationItem[] = [
-  {
-    text: 'Unified Management',
-    icon: <GroupIcon />,
-    path: '/unified-management',
-    description: 'User management and member management in one place',
-  },
+  // Unified Management functionality is now integrated into the Membership page
 ]
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {

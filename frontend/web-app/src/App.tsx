@@ -20,7 +20,6 @@ import UserManagementPage from './pages/UserManagementPage'
 import SystemAdministrationPage from './pages/SystemAdministrationPage'
 import SettingsPage from './pages/SettingsPage'
 import MembershipManagementPage from './pages/MembershipManagementPage'
-import UnifiedManagementPage from './pages/UnifiedManagementPage'
 
 function App() {
   return (
@@ -52,13 +51,7 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
-          <Route path="/unified-management" element={
-            <ProtectedRoute>
-              <Layout>
-                <UnifiedManagementPage />
-              </Layout>
-            </ProtectedRoute>
-          } />
+
           <Route path="/admin/activation-requests" element={
             <ProtectedRoute>
               <Layout>
