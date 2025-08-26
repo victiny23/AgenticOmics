@@ -102,22 +102,39 @@ interface Lab {
   id: number;
   labId: string;
   labName: string;
-  labDescription: string;
+  labDescription?: string;
+  description?: string;
+  institution?: string;
+  department?: string;
+  isActive?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  memberCount?: number;
+  teamCount?: number;
+  piUsername?: string;
 }
 
 interface Team {
   id: number;
   teamId: string;
   teamName: string;
-  teamDescription: string;
-  labId: string;
-  labName: string;
+  teamDescription?: string;
+  description?: string;
+  labId?: string;
+  labName?: string;
+  isActive?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  memberCount?: number;
+  leaderUsername?: string;
 }
 
 const MembershipManagementPage: React.FC = () => {
   const { username, role, token } = useAuth();
   const [searchParams] = useSearchParams();
   const [tabValue, setTabValue] = useState(0);
+  
+
   
   // Leave lab/team states
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
@@ -221,6 +238,10 @@ const MembershipManagementPage: React.FC = () => {
   const [selectedInvitation, setSelectedInvitation] = useState<any>(null);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
+  
+  // Deletion confirmation states
+  const [deleteConfirmationDialogOpen, setDeleteConfirmationDialogOpen] = useState(false);
+  const [deleteConfirmationTarget, setDeleteConfirmationTarget] = useState<{ type: 'lab' | 'team', id: number, name: string } | null>(null);
 
   const loadUserProfile = async () => {
     if (!token) return;
@@ -265,17 +286,15 @@ const MembershipManagementPage: React.FC = () => {
 
   // Load unified management data when tab changes to unified management tabs
   useEffect(() => {
-    if (role === 'Super Admin' && tabValue >= 6) {
-      // Load data for Super Admin unified management tabs (User Management, Lab Overview, Team Overview)
-      if (tabValue === 6) { // User Management tab
-        loadAllUsersForManagement();
-      } else if (tabValue === 7) { // Lab Overview tab
-        loadManagedLabsAndTeams();
+    if (role === 'Super Admin' && (tabValue === 6 || tabValue === 7)) {
+      // Load data for Super Admin unified management tabs (Lab Overview, Team Overview)
+      if (tabValue === 6) { // Lab Overview tab
+        loadAllLabsForSuperAdmin();
         // Clear any existing member data to show fresh data
         setLabMembers([]);
         setTeamMembers([]);
-      } else if (tabValue === 8) { // Team Overview tab
-        loadManagedLabsAndTeams();
+      } else if (tabValue === 7) { // Team Overview tab
+        loadAllTeamsForSuperAdmin();
         // Clear any existing member data to show fresh data
         setLabMembers([]);
         setTeamMembers([]);
@@ -711,6 +730,124 @@ const MembershipManagementPage: React.FC = () => {
       setError(`Failed to ${action} user`);
     }
   };
+
+  const handleDeleteLab = async (labId: number, labName: string) => {
+    setDeleteConfirmationTarget({ type: 'lab', id: labId, name: labName });
+    setDeleteConfirmationDialogOpen(true);
+  };
+
+  const confirmDeleteLab = async () => {
+    if (!token || !deleteConfirmationTarget) return;
+    
+    try {
+      const response = await fetch(`/api/auth/admin/system/labs/${deleteConfirmationTarget.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || ''
+        }
+      });
+      
+      if (response.ok) {
+        setSuccess('Lab deleted successfully');
+        setDeleteConfirmationDialogOpen(false);
+        setDeleteConfirmationTarget(null);
+        loadData(); // Refresh the data
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to delete lab:', response.status, errorText);
+        setError(`Failed to delete lab: ${errorText}`);
+      }
+    } catch (error) {
+      console.error('Error deleting lab:', error);
+      setError('Failed to delete lab');
+    }
+  };
+
+  const handleDeleteTeam = async (teamId: number, teamName: string) => {
+    setDeleteConfirmationTarget({ type: 'team', id: teamId, name: teamName });
+    setDeleteConfirmationDialogOpen(true);
+  };
+
+  const confirmDeleteTeam = async () => {
+    if (!token || !deleteConfirmationTarget) return;
+    
+    try {
+      const response = await fetch(`/api/auth/admin/system/teams/${deleteConfirmationTarget.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || ''
+        }
+      });
+      
+      if (response.ok) {
+        setSuccess('Team deleted successfully');
+        setDeleteConfirmationDialogOpen(false);
+        setDeleteConfirmationTarget(null);
+        loadData(); // Refresh the data
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to delete team:', response.status, errorText);
+        setError(`Failed to delete team: ${errorText}`);
+      }
+    } catch (error) {
+      console.error('Error deleting team:', error);
+      setError('Failed to delete team');
+    }
+  };
+
+  // Super Admin functions for loading all labs and teams
+  const loadAllLabsForSuperAdmin = async () => {
+    if (!token) return;
+    
+    try {
+      // Try the regular labs endpoint first
+      const response = await fetch('/api/auth/labs', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setLabs(data);
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to load labs for Super Admin:', response.status, response.statusText, errorText);
+        setError('Failed to load labs');
+      }
+    } catch (error) {
+      console.error('Error loading labs for Super Admin:', error);
+      setError('Failed to load labs');
+    }
+  };
+
+  const loadAllTeamsForSuperAdmin = async () => {
+    if (!token) return;
+    
+    try {
+      // Try the regular teams endpoint first
+      const response = await fetch('/api/auth/teams', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🔍 Team data received:', data);
+        setTeams(data);
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to load teams for Super Admin:', response.status, response.statusText, errorText);
+        setError('Failed to load teams');
+      }
+    } catch (error) {
+      console.error('Error loading teams for Super Admin:', error);
+      setError('Failed to load teams');
+    }
+  };
   
   const getCurrentUserRoleInTeam = async (teamId: number) => {
     try {
@@ -1075,16 +1212,30 @@ const MembershipManagementPage: React.FC = () => {
     const now = new Date();
     const diffTime = expirationDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+    const diffMinutes = Math.ceil(diffTime / (1000 * 60));
     
     if (diffDays < 0) {
-      return `Expired ${Math.abs(diffDays)} days ago`;
+      return `Expired ${Math.abs(diffDays)} days ago (${expirationDate.toLocaleString()})`;
     } else if (diffDays === 0) {
-      return 'Expires today';
+      if (diffHours <= 0) {
+        if (diffMinutes <= 0) {
+          return `Expired (${expirationDate.toLocaleString()})`;
+        } else {
+          return `Expires in ${diffMinutes} minutes (${expirationDate.toLocaleString()})`;
+        }
+      } else {
+        return `Expires in ${diffHours} hours (${expirationDate.toLocaleString()})`;
+      }
     } else if (diffDays === 1) {
-      return 'Expires tomorrow';
+      return `Expires tomorrow (${expirationDate.toLocaleString()})`;
     } else {
-      return `Expires in ${diffDays} days`;
+      return `Expires in ${diffDays} days (${expirationDate.toLocaleString()})`;
     }
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
   };
 
   return (
@@ -1093,23 +1244,20 @@ const MembershipManagementPage: React.FC = () => {
         Membership Management
       </Typography>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
+              {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+        {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
+        
 
-      <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
+
+              <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ mb: 3 }}>
         <Tab label="My Applications" />
         <Tab label="My Invitations" />
         <Tab label="Pending Approvals" />
         <Tab label="My Memberships" />
         <Tab label="Send Invitations" />
         <Tab label="Manage Members" />
-        {role === 'Super Admin' && (
-          <>
-            <Tab label="User Management" />
-            <Tab label="Lab Overview" />
-            <Tab label="Team Overview" />
-          </>
-        )}
+        <Tab label="Lab Overview" style={{ display: role === 'Super Admin' ? 'block' : 'none' }} />
+        <Tab label="Team Overview" style={{ display: role === 'Super Admin' ? 'block' : 'none' }} />
       </Tabs>
 
       {/* My Applications - Lab and Team Requests */}
@@ -1150,7 +1298,7 @@ const MembershipManagementPage: React.FC = () => {
                         </Typography>
                       )}
                       <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                        Requested: {formatDate(request.createdAt)}
+                        Requested: {formatDateTime(request.createdAt)}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -1183,7 +1331,7 @@ const MembershipManagementPage: React.FC = () => {
                         </Typography>
                       )}
                       <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                        Requested: {formatDate(request.createdAt)}
+                        Requested: {formatDateTime(request.createdAt)}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -1230,6 +1378,7 @@ const MembershipManagementPage: React.FC = () => {
                     </Box>
                     <Typography color="textSecondary">Role: {invitation.invitedRole}</Typography>
                     <Typography color="textSecondary">From: {invitation.invitedByUsername}</Typography>
+                    <Typography color="textSecondary">Created: {formatDateTime(invitation.createdAt)}</Typography>
                     {invitation.invitationMessage && (
                       <Typography variant="body2" sx={{ mt: 1 }}>
                         Message: {invitation.invitationMessage}
@@ -1318,6 +1467,7 @@ const MembershipManagementPage: React.FC = () => {
                     <Typography color="textSecondary">Team: {invitation.teamName}</Typography>
                     <Typography color="textSecondary">Role: {invitation.invitedRole}</Typography>
                     <Typography color="textSecondary">From: {invitation.invitedByUsername}</Typography>
+                    <Typography color="textSecondary">Created: {formatDateTime(invitation.createdAt)}</Typography>
                     {invitation.invitationMessage && (
                       <Typography variant="body2" sx={{ mt: 1 }}>
                         Message: {invitation.invitationMessage}
@@ -1404,6 +1554,7 @@ const MembershipManagementPage: React.FC = () => {
                         <Typography color="textSecondary">Invitee: {invitation.invitedUsername}</Typography>
                         <Typography color="textSecondary">Role: {invitation.invitedRole}</Typography>
                         <Typography color="textSecondary">Invited by: {invitation.invitedByUsername}</Typography>
+                        <Typography color="textSecondary">Created: {formatDateTime(invitation.createdAt)}</Typography>
                         {invitation.invitationMessage && (
                           <Typography variant="body2" sx={{ mt: 1 }}>
                             Message: {invitation.invitationMessage}
@@ -1470,6 +1621,7 @@ const MembershipManagementPage: React.FC = () => {
                         <Typography color="textSecondary">Invitee: {invitation.invitedUsername}</Typography>
                         <Typography color="textSecondary">Role: {invitation.invitedRole}</Typography>
                         <Typography color="textSecondary">Invited by: {invitation.invitedByUsername}</Typography>
+                        <Typography color="textSecondary">Created: {formatDateTime(invitation.createdAt)}</Typography>
                         {invitation.invitationMessage && (
                           <Typography variant="body2" sx={{ mt: 1 }}>
                             Message: {invitation.invitationMessage}
@@ -1689,225 +1841,119 @@ const MembershipManagementPage: React.FC = () => {
         </Box>
       )}
 
-      {/* User Management (Platform-wide for Super Admin) */}
+      {/* Lab Overview (for Super Admin) */}
       {tabValue === 6 && role === 'Super Admin' && (
         <Box>
-          <Typography variant="h6" sx={{ mb: 2 }}>Platform User Management</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>Platform Lab Overview</Typography>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-            Manage all users across the entire platform. You can activate or deactivate any user account.
-            {!showDeactivated && (
-              <Alert severity="info" sx={{ mt: 1 }}>
-                <Typography variant="body2">
-                  <strong>Note:</strong> Currently showing only active users. Use the "Status Filter" to view all users including deactivated ones.
-                </Typography>
-              </Alert>
-            )}
+            Overview of all labs across the platform with detailed information and management capabilities.
           </Typography>
           
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6">All Platform Users</Typography>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <Chip 
-                label={`${allUsers.filter(user => user.isActive).length} Active`}
-                color="success"
-                variant="outlined"
-              />
-              <Chip 
-                label={`${allUsers.filter(user => !user.isActive).length} Inactive`}
-                color="error"
-                variant="outlined"
-              />
-              <Chip 
-                label={`${allUsers
-                  .filter(user => 
-                    userSearchTerm === '' || 
-                    user.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-                    user.email.toLowerCase().includes(userSearchTerm.toLowerCase())
-                  )
-                  .filter(user => userRoleFilter === 'all' || user.role === userRoleFilter)
-                  .length} Total`}
-                color="primary"
-                variant="outlined"
-              />
-            </Box>
-          </Box>
-          
-          {/* Search and Filter Controls */}
-          <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-            <TextField
-              label="Search users"
-              variant="outlined"
-              size="small"
-              value={userSearchTerm}
-              onChange={(e) => setUserSearchTerm(e.target.value)}
-              placeholder="Search by username or email..."
-              sx={{ minWidth: 250 }}
-            />
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>Filter by Role</InputLabel>
-              <Select
-                value={userRoleFilter}
-                onChange={(e) => setUserRoleFilter(e.target.value)}
-                label="Filter by Role"
-              >
-                <MenuItem value="all">All Roles</MenuItem>
-                <MenuItem value="Super Admin">Super Admin</MenuItem>
-                <MenuItem value="Lab PI">Lab PI</MenuItem>
-                <MenuItem value="Team Leader">Team Leader</MenuItem>
-                <MenuItem value="Member">Member</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>Status Filter</InputLabel>
-              <Select
-                value={showDeactivated ? 'all' : 'active'}
-                onChange={(e) => setShowDeactivated(e.target.value === 'all')}
-                label="Status Filter"
-              >
-                <MenuItem value="all">All Users</MenuItem>
-                <MenuItem value="active">Active Only</MenuItem>
-              </Select>
-            </FormControl>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => {
-                setUserSearchTerm('');
-                setUserRoleFilter('all');
-                setShowDeactivated(true);
-              }}
-            >
-              Clear Filters
-            </Button>
-          </Box>
+          <Card sx={{ mb: 3, p: 2, bgcolor: 'primary.light', color: 'white' }}>
+            <Typography variant="h6">Platform Summary</Typography>
+            <Typography variant="body2">
+              Total Labs: {labs.length} | Active Labs: {labs.filter(lab => lab.isActive).length} | 
+              Total Lab Members: {labs.reduce((sum, lab) => sum + (lab.memberCount || 0), 0)}
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 1, fontSize: '0.8rem' }}>
+              Debug: labs state length = {labs.length}
+            </Typography>
+          </Card>
           
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>Username</strong></TableCell>
-                  <TableCell><strong>Email</strong></TableCell>
-                  <TableCell><strong>Role</strong></TableCell>
+                  <TableCell><strong>Lab Name</strong></TableCell>
+                  <TableCell><strong>PI</strong></TableCell>
+                  <TableCell><strong>Members</strong></TableCell>
+                  <TableCell><strong>Teams</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Created</strong></TableCell>
-                  <TableCell><strong>Last Login</strong></TableCell>
                   <TableCell><strong>Actions</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {allUsers
-                  .filter(user => showDeactivated || user.isActive)
-                  .filter(user => 
-                    userSearchTerm === '' || 
-                    user.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-                    user.email.toLowerCase().includes(userSearchTerm.toLowerCase())
-                  )
-                  .filter(user => userRoleFilter === 'all' || user.role === userRoleFilter)
-                  .map((user) => (
-                    <TableRow key={user.id} sx={{ 
-                      backgroundColor: user.isActive ? 'inherit' : 'rgba(255, 0, 0, 0.08)',
-                      '&:hover': { backgroundColor: user.isActive ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 0, 0, 0.12)' },
-                      borderLeft: user.isActive ? 'none' : '4px solid #f44336'
-                    }}>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2" sx={{ 
-                            fontWeight: 'medium',
-                            color: user.isActive ? 'inherit' : 'text.secondary',
-                            textDecoration: user.isActive ? 'none' : 'line-through'
-                          }}>
-                            {user.username}
-                          </Typography>
-                          {user.role === 'Super Admin' && (
-                            <Chip label="Admin" size="small" color="error" />
-                          )}
-                          {!user.isActive && (
-                            <Chip label="DEACTIVATED" size="small" color="error" variant="filled" />
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography sx={{ 
-                          color: user.isActive ? 'inherit' : 'text.secondary',
-                          textDecoration: user.isActive ? 'none' : 'line-through'
-                        }}>
-                          {user.email}
+                {labs.map((lab) => (
+                  <TableRow key={lab.id} sx={{
+                    backgroundColor: lab.isActive ? 'inherit' : 'rgba(255, 0, 0, 0.05)',
+                    borderLeft: lab.isActive ? 'none' : '4px solid #f44336'
+                  }}>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                          {lab.labName}
                         </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={user.role} 
+                        {!lab.isActive && (
+                          <Chip label="INACTIVE" size="small" color="error" variant="filled" />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={lab.piUsername || 'No PI'} 
+                        size="small"
+                        color={lab.piUsername ? 'primary' : 'default'}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={`${lab.memberCount || 0} members`}
+                        size="small"
+                        color="secondary"
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={`${lab.teamCount || 0} teams`}
+                        size="small"
+                        color="info"
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={lab.isActive ? '🟢 Active' : '🔴 Inactive'} 
+                        color={lab.isActive ? 'success' : 'error'} 
+                        size="small"
+                        variant="filled"
+                      />
+                    </TableCell>
+                    <TableCell>{new Date(lab.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button 
+                          variant="outlined" 
                           size="small"
-                          color={
-                            user.role === 'Super Admin' ? 'error' :
-                            user.role === 'Lab PI' ? 'primary' :
-                            user.role === 'Team Leader' ? 'secondary' :
-                            'default'
-                          }
-                          variant={user.isActive ? 'filled' : 'outlined'}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Chip 
-                            label={user.isActive ? '🟢 Active' : '🔴 Inactive'} 
-                            color={user.isActive ? 'success' : 'error'} 
-                            size="small"
-                            variant="filled"
-                          />
-                          {user.isActive ? (
-                            <Typography variant="caption" color="success.main">
-                              Can access platform
-                            </Typography>
-                          ) : (
-                            <Typography variant="caption" color="error.main">
-                              Cannot access platform
-                            </Typography>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : 'Never'}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                          {user.isActive ? (
-                            <Button 
-                              variant="contained" 
-                              color="error" 
-                              size="small"
-                              onClick={() => setConfirmDialog({ open: true, user, action: 'deactivate' })}
-                              disabled={user.role === 'Super Admin' && user.username === username}
-                              startIcon={<span>🚫</span>}
-                            >
-                              Deactivate
-                            </Button>
-                          ) : (
-                            <Button 
-                              variant="contained" 
-                              color="success" 
-                              size="small"
-                              onClick={() => setConfirmDialog({ open: true, user, action: 'activate' })}
-                              startIcon={<span>✅</span>}
-                            >
-                              Activate
-                            </Button>
-                          )}
-                          {user.role === 'Super Admin' && user.username === username && (
-                            <Chip label="Current User" size="small" color="warning" />
-                          )}
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          onClick={() => loadLabMembersForManagement(lab.id)}
+                        >
+                          View Members
+                        </Button>
+                        <Button 
+                          variant="outlined" 
+                          color="error"
+                          size="small"
+                          onClick={() => handleDeleteLab(lab.id, lab.labName)}
+                        >
+                          Delete
+                        </Button>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </TableContainer>
           
-          {allUsers.length === 0 && (
+          {labs.length === 0 && (
             <Alert severity="info" sx={{ mt: 2 }}>
-              No users found. Please check your connection or try refreshing the page.
+              No labs found. Create a new lab to get started.
+              <br />
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Debug: Check browser console for API response details.
+              </Typography>
             </Alert>
           )}
         </Box>
@@ -1980,70 +2026,120 @@ const MembershipManagementPage: React.FC = () => {
         </Box>
       )}
 
-      {/* Team Members Management (Unified Management) */}
-      {tabValue === 8 && (role === 'Lab PI' || role === 'Super Admin') && (
+      {/* Team Overview (for Super Admin) */}
+      {tabValue === 7 && role === 'Super Admin' && (
         <Box>
-          <Typography variant="h6" sx={{ mb: 2 }}>Team Members Overview</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>Platform Team Overview</Typography>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-            Overview of all teams you manage as Leader. Click "View Members" to see detailed member lists.
+            Overview of all teams across the platform with detailed information and management capabilities.
           </Typography>
-          {managedTeams.length === 0 ? (
-            <Alert severity="info">
-              You are not a Team Leader of any teams. Only Team Leaders can manage team members.
-            </Alert>
-          ) : (
-            <>
-              <Card sx={{ mb: 3, bgcolor: 'secondary.light', color: 'white' }}>
-                <CardContent>
-                  <Typography variant="h6">Summary</Typography>
-                  <Typography variant="body2">
-                    You are managing {managedTeams.length} team{managedTeams.length !== 1 ? 's' : ''} as Leader
-                  </Typography>
-                </CardContent>
-              </Card>
-              <Grid container spacing={2}>
-              {managedTeams.map((team) => (
-                <Grid item xs={12} md={6} key={team.id}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6">{team.teamName}</Typography>
-                      <Typography color="textSecondary">Team ID: {team.teamId}</Typography>
-                      <Typography color="textSecondary">Lab: {team.labName}</Typography>
-                      <Typography color="textSecondary">Description: {team.teamDescription}</Typography>
-                      <Button 
-                        variant="outlined" 
+          
+          <Card sx={{ mb: 3, p: 2, bgcolor: 'secondary.light', color: 'white' }}>
+            <Typography variant="h6">Platform Summary</Typography>
+            <Typography variant="body2">
+              Total Teams: {teams.length} | Active Teams: {teams.filter(team => team.isActive).length} | 
+              Total Team Members: {teams.reduce((sum, team) => sum + (team.memberCount || 0), 0)}
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 1, fontSize: '0.8rem' }}>
+              Debug: teams state length = {teams.length}
+            </Typography>
+          </Card>
+          
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Team Name</strong></TableCell>
+                  <TableCell><strong>Lab</strong></TableCell>
+                  <TableCell><strong>Leader</strong></TableCell>
+                  <TableCell><strong>Members</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                  <TableCell><strong>Created</strong></TableCell>
+                  <TableCell><strong>Actions</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {teams.map((team) => (
+                  <TableRow key={team.id} sx={{
+                    backgroundColor: team.isActive ? 'inherit' : 'rgba(255, 0, 0, 0.05)',
+                    borderLeft: team.isActive ? 'none' : '4px solid #f44336'
+                  }}>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                          {team.teamName}
+                        </Typography>
+                        {!team.isActive && (
+                          <Chip label="INACTIVE" size="small" color="error" variant="filled" />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={team.labName || 'No Lab'} 
                         size="small"
-                        onClick={() => loadTeamMembersForManagement(team.id)}
-                        sx={{ mt: 1 }}
-                      >
-                        View Members
-                      </Button>
-                      {teamMembers.length > 0 && (
-                        <List sx={{ mt: 2 }}>
-                          {teamMembers.map((member) => (
-                            <ListItem key={member.username} divider>
-                              <ListItemText
-                                primary={member.username}
-                                secondary={`${member.email} - ${member.roleInTeam || 'Member'}`}
-                              />
-                              <Button 
-                                variant="outlined" 
-                                color="error" 
-                                size="small"
-                                onClick={() => openRemoveMemberDialog('team', member)}
-                              >
-                                Remove
-                              </Button>
-                            </ListItem>
-                          ))}
-                        </List>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-            </>
+                        color={team.labName ? 'primary' : 'default'}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={team.leaderUsername || 'No Leader'} 
+                        size="small"
+                        color={team.leaderUsername ? 'secondary' : 'default'}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={`${team.memberCount || 0} members`}
+                        size="small"
+                        color="info"
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={team.isActive ? '🟢 Active' : '🔴 Inactive'} 
+                        color={team.isActive ? 'success' : 'error'} 
+                        size="small"
+                        variant="filled"
+                      />
+                    </TableCell>
+                    <TableCell>{new Date(team.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button 
+                          variant="outlined" 
+                          size="small"
+                          onClick={() => loadTeamMembersForManagement(team.id)}
+                        >
+                          View Members
+                        </Button>
+                        <Button 
+                          variant="outlined" 
+                          color="error"
+                          size="small"
+                          onClick={() => handleDeleteTeam(team.id, team.teamName)}
+                        >
+                          Delete
+                        </Button>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          {teams.length === 0 && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              No teams found. Create a new team to get started.
+              <br />
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Debug: Check browser console for API response details.
+              </Typography>
+            </Alert>
           )}
         </Box>
       )}
@@ -2649,6 +2745,56 @@ const MembershipManagementPage: React.FC = () => {
             disabled={confirmDialog.user?.role === 'Super Admin' && confirmDialog.user?.username === username && confirmDialog.action === 'deactivate'}
           >
             {confirmDialog.action === 'activate' ? 'Activate' : 'Deactivate'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Deletion Confirmation Dialog */}
+      <Dialog open={deleteConfirmationDialogOpen} onClose={() => {
+        setDeleteConfirmationDialogOpen(false);
+        setDeleteConfirmationTarget(null);
+      }} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Confirm Deletion
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to delete <strong>"{deleteConfirmationTarget?.name}"</strong> ({deleteConfirmationTarget?.type})?
+          </Typography>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body2">
+              <strong>Warning:</strong> This action cannot be undone. Deleting this {deleteConfirmationTarget?.type} will:
+            </Typography>
+            <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+              <li>Remove all associated members</li>
+              <li>Delete all teams within this lab (if deleting a lab)</li>
+              <li>Remove all data and resources</li>
+              <li>Cancel all pending invitations and applications</li>
+            </ul>
+          </Alert>
+          <Typography variant="body2" color="textSecondary">
+            This is a permanent action that will affect all users associated with this {deleteConfirmationTarget?.type}.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setDeleteConfirmationDialogOpen(false);
+            setDeleteConfirmationTarget(null);
+          }}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              if (deleteConfirmationTarget?.type === 'lab') {
+                confirmDeleteLab();
+              } else if (deleteConfirmationTarget?.type === 'team') {
+                confirmDeleteTeam();
+              }
+            }} 
+            variant="contained"
+            color="error"
+          >
+            Delete {deleteConfirmationTarget?.type === 'lab' ? 'Lab' : 'Team'}
           </Button>
         </DialogActions>
       </Dialog>

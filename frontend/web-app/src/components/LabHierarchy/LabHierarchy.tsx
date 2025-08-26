@@ -32,6 +32,8 @@ import {
   MenuItem,
   Alert,
   CircularProgress,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import {
   SupervisorAccount,
@@ -143,6 +145,7 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [tabValue, setTabValue] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -152,6 +155,13 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
     description: '',
     id: '',
   });
+  
+  // Invitation states
+  const [inviteMembers, setInviteMembers] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<Array<{username: string, email: string}>>([]);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [userRoles, setUserRoles] = useState<{[key: string]: string}>({});
+  const [invitationMessage, setInvitationMessage] = useState('');
   const [nextLabId, setNextLabId] = useState<string>('');
   const [nextTeamId, setNextTeamId] = useState<string>('');
   const [loadingNextId, setLoadingNextId] = useState(false);
@@ -170,8 +180,40 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
       } else if (createType === 'team') {
         fetchNextTeamId();
       }
+      // Load available users for invitation
+      loadAvailableUsers();
+      // Reset user roles when switching between lab and team
+      setUserRoles({});
     }
   }, [createDialogOpen, createType]);
+
+  // Reset user roles when switching between lab and team
+  useEffect(() => {
+    setUserRoles({});
+  }, [createType]);
+
+  const loadAvailableUsers = async () => {
+    try {
+      const token = localStorage.getItem('jwtToken');
+      const currentUsername = localStorage.getItem('username');
+      
+      const response = await axios.get('http://localhost:12001/api/auth/public/users/basic', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      // Filter out current user and admin
+      const filteredUsers = response.data.filter((user: any) => 
+        user.username !== currentUsername && user.username !== 'admin'
+      );
+      
+      setAvailableUsers(filteredUsers);
+    } catch (err: any) {
+      console.error('Failed to load available users:', err);
+      setAvailableUsers([]);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -309,9 +351,12 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
   const handleCreateOrganization = async () => {
     try {
       const token = localStorage.getItem('jwtToken');
+      let createdOrgId: number | null = null;
+      let createdOrgName: string = '';
+      
       if (createType === 'lab') {
         // Use auto-generated ID for labs
-        await axios.post('http://localhost:12001/api/auth/admin/labs/auto-id', {
+        const response = await axios.post('http://localhost:12001/api/auth/admin/labs/auto-id', {
           labName: createForm.name,
           labDescription: createForm.description,
           institution: 'University of Science',
@@ -319,23 +364,133 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
         }, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
+        createdOrgId = response.data.id;
+        createdOrgName = response.data.labName;
+        console.log(`Lab created successfully: ${createdOrgName} (ID: ${createdOrgId})`);
       } else {
         // Use auto-generated ID for teams
-        await axios.post('http://localhost:12001/api/auth/admin/teams/auto-id', {
+        const response = await axios.post('http://localhost:12001/api/auth/admin/teams/auto-id', {
           teamName: createForm.name,
           teamDescription: createForm.description,
           labId: 1 // Default lab ID - should be selectable in a real app
         }, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
+        createdOrgId = response.data.id;
+        createdOrgName = response.data.teamName;
+        console.log(`Team created successfully: ${createdOrgName} (ID: ${createdOrgId})`);
       }
+      
+      // Send invitations if users are selected
+      let invitationResults: Array<{ username: string; success: boolean; data?: any; error?: string }> = [];
+      if (inviteMembers && selectedUsers.length > 0 && createdOrgId) {
+        console.log(`Sending ${selectedUsers.length} invitation(s) for ${createType} "${createdOrgName}"`);
+        invitationResults = await sendInvitations(createdOrgId);
+        
+        // Show invitation summary
+        const successfulInvitations = invitationResults.filter(r => r.success);
+        const failedInvitations = invitationResults.filter(r => !r.success);
+        
+        if (successfulInvitations.length > 0) {
+          console.log(`✅ Successfully sent ${successfulInvitations.length} invitation(s) to:`, 
+            successfulInvitations.map(r => r.username).join(', '));
+        }
+        
+        if (failedInvitations.length > 0) {
+          console.warn(`❌ Failed to send ${failedInvitations.length} invitation(s) to:`, 
+            failedInvitations.map(r => r.username).join(', '));
+        }
+      }
+      
       setCreateDialogOpen(false);
       setCreateForm({ name: '', description: '', id: '' });
       setNextLabId('');
       setNextTeamId('');
+      setInviteMembers(false);
+      setSelectedUsers([]);
+      setUserRoles({});
+      setInvitationMessage('');
       fetchProfile(); // Refresh data
+      
+      // Show success message
+      const successMessageText = `${createType === 'lab' ? 'Lab' : 'Team'} "${createdOrgName}" created successfully!${
+        invitationResults.length > 0 ? ` ${invitationResults.filter(r => r.success).length} invitation(s) sent.` : ''
+      }`;
+      console.log(successMessageText);
+      setSuccessMessage(successMessageText);
+      
     } catch (err: any) {
+      console.error('Failed to create organization:', err);
       setError(err.response?.data || 'Failed to create organization');
+    }
+  };
+
+  const sendInvitations = async (orgId: number) => {
+    try {
+      const token = localStorage.getItem('jwtToken');
+      const currentUsername = localStorage.getItem('username');
+      
+      console.log(`Sending invitations for ${createType} ID ${orgId} to users:`, selectedUsers);
+      
+      const invitationResults = [];
+      
+      for (const username of selectedUsers) {
+        const role = userRoles[username] || 'Member';
+        const endpoint = createType === 'lab' 
+          ? 'http://localhost:12001/api/auth/lab-invitations'
+          : 'http://localhost:12001/api/auth/team-invitations';
+        
+        const invitationData = createType === 'lab' 
+          ? {
+              invitedUsername: username,
+              labId: orgId,
+              invitedRole: role,
+              invitationMessage: invitationMessage || `You have been invited to join ${createForm.name}`
+            }
+          : {
+              invitedUsername: username,
+              teamId: orgId,
+              invitedRole: role,
+              invitationMessage: invitationMessage || `You have been invited to join ${createForm.name}`
+            };
+        
+        try {
+          console.log(`Sending invitation to ${username} for role ${role}`);
+          const response = await axios.post(endpoint, invitationData, {
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'X-Username': currentUsername
+            }
+          });
+          
+          console.log(`Successfully sent invitation to ${username}:`, response.data);
+          invitationResults.push({ username, success: true, data: response.data });
+        } catch (invitationErr: any) {
+          console.error(`Failed to send invitation to ${username}:`, invitationErr.response?.data || invitationErr.message);
+          invitationResults.push({ 
+            username, 
+            success: false, 
+            error: invitationErr.response?.data || invitationErr.message 
+          });
+        }
+      }
+      
+      // Show summary of invitation results
+      const successfulInvitations = invitationResults.filter(r => r.success);
+      const failedInvitations = invitationResults.filter(r => !r.success);
+      
+      if (successfulInvitations.length > 0) {
+        console.log(`Successfully sent ${successfulInvitations.length} invitation(s):`, successfulInvitations);
+      }
+      
+      if (failedInvitations.length > 0) {
+        console.warn(`Failed to send ${failedInvitations.length} invitation(s):`, failedInvitations);
+      }
+      
+      return invitationResults;
+    } catch (err: any) {
+      console.error('Failed to send invitations:', err);
+      throw err; // Re-throw to handle in the calling function
     }
   };
 
@@ -434,6 +589,19 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
   return (
     <Card sx={{ mb: 2 }}>
       <CardContent>
+        {/* Success Message */}
+        {successMessage && (
+          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage(null)}>
+            {successMessage}
+          </Alert>
+        )}
+        
+        {/* Error Message */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <AccountTree sx={{ mr: 1, color: 'primary.main' }} />
           <Typography variant="h6" component="h2">
@@ -892,7 +1060,17 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
         </Box>
 
         {/* Create Organization Dialog */}
-        <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
+        <Dialog 
+          open={createDialogOpen} 
+          onClose={() => setCreateDialogOpen(false)} 
+          maxWidth="sm" 
+          fullWidth
+          sx={{
+            '& .MuiDialog-paper': {
+              zIndex: 1300
+            }
+          }}
+        >
           {createDialogOpen && (
             <Box sx={{ position: 'absolute', top: 0, right: 0, p: 1 }}>
               {loadingNextId ? (
@@ -963,7 +1141,145 @@ const LabHierarchy: React.FC<LabHierarchyProps> = ({ username }) => {
                 multiline
                 rows={3}
                 placeholder="Brief description of the organization..."
+                sx={{ mb: 2 }}
               />
+              
+              {/* Invite Members Section */}
+              <Divider sx={{ my: 2 }} />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={inviteMembers}
+                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInviteMembers(e.target.checked)}
+                  />
+                }
+                label="Invite members to join this organization"
+              />
+              
+              {inviteMembers && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Select members to invite:
+                  </Typography>
+                  {availableUsers.length > 0 ? (
+                    <Box sx={{ maxHeight: 200, overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, p: 1, position: 'relative' }}>
+                      {availableUsers.map((user) => (
+                        <Box key={user.username} sx={{ display: 'flex', alignItems: 'center', mb: 1, py: 0.5 }}>
+                          <Checkbox
+                            checked={selectedUsers.includes(user.username)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                              if (e.target.checked) {
+                                setSelectedUsers([...selectedUsers, user.username]);
+                              } else {
+                                setSelectedUsers(selectedUsers.filter(u => u !== user.username));
+                                setUserRoles(prev => {
+                                  const newRoles = { ...prev };
+                                  delete newRoles[user.username];
+                                  return newRoles;
+                                });
+                              }
+                            }}
+                          />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="body2">{user.username}</Typography>
+                            <Typography variant="caption" color="textSecondary">{user.email}</Typography>
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="textSecondary">
+                      No available users to invite.
+                    </Typography>
+                  )}
+                  
+                                    {/* Role Selection Section - Outside scrollable container */}
+                  {selectedUsers.length > 0 && (
+                    <Box sx={{ 
+                      mt: 2, 
+                      p: 2, 
+                      border: 1, 
+                      borderColor: 'divider', 
+                      borderRadius: 1, 
+                      bgcolor: 'grey.50',
+                      position: 'relative',
+                      zIndex: 1
+                    }}>
+                      <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                        Assign roles to selected users:
+                      </Typography>
+                      {selectedUsers.map((username) => {
+                        const user = availableUsers.find(u => u.username === username);
+                        return (
+                          <Box key={username} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                            <Typography variant="body2" sx={{ minWidth: 100, mr: 2 }}>
+                              {username}:
+                            </Typography>
+                            <FormControl size="small" sx={{ minWidth: 150, position: 'relative', zIndex: 10 }}>
+                              <InputLabel>Role</InputLabel>
+                              <select
+                                value={userRoles[username] || ''}
+                                onChange={(e) => {
+                                  console.log('Role selected:', e.target.value, 'for user:', username);
+                                  setUserRoles(prev => ({ ...prev, [username]: e.target.value }));
+                                }}
+                                style={{
+                                  padding: '8px 12px',
+                                  border: '1px solid #ccc',
+                                  borderRadius: '4px',
+                                  fontSize: '14px',
+                                  minWidth: '150px',
+                                  backgroundColor: 'white',
+                                  position: 'relative',
+                                  zIndex: 10
+                                }}
+                              >
+                                <option value="">Select a role...</option>
+                                {createType === 'lab' ? (
+                                  // Lab roles
+                                  <>
+                                    <option value="Lab PI">Lab PI</option>
+                                    <option value="PhD Student">PhD Student</option>
+                                    <option value="Master Student">Master Student</option>
+                                    <option value="Postdoc">Postdoc</option>
+                                    <option value="Research Assistant">Research Assistant</option>
+                                    <option value="Lab Technician">Lab Technician</option>
+                                    <option value="Visiting Scholar">Visiting Scholar</option>
+                                    <option value="Member">Member</option>
+                                  </>
+                                ) : (
+                                  // Team roles
+                                  <>
+                                    <option value="Team Leader">Team Leader</option>
+                                    <option value="Senior Member">Senior Member</option>
+                                    <option value="Junior Member">Junior Member</option>
+                                    <option value="Data Analyst">Data Analyst</option>
+                                    <option value="Technician">Technician</option>
+                                    <option value="Member">Member</option>
+                                  </>
+                                )}
+                              </select>
+                            </FormControl>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  )}
+                  
+                  {selectedUsers.length > 0 && (
+                    <TextField
+                      fullWidth
+                      label="Invitation Message (Optional)"
+                      value={invitationMessage}
+                      onChange={(e) => setInvitationMessage(e.target.value)}
+                      multiline
+                      rows={2}
+                      placeholder="Personal message to include with invitations..."
+                      sx={{ mt: 2 }}
+                    />
+                  )}
+                </Box>
+              )}
             </Box>
           </DialogContent>
           <DialogActions>
