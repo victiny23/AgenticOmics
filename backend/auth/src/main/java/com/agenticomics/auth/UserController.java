@@ -3037,8 +3037,7 @@ public class UserController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("status is required");
             }
             
-            LabMembershipRequest.RequestStatus requestStatus = LabMembershipRequest.RequestStatus.valueOf(status.toUpperCase());
-            LabMembershipRequestDto result = membershipRequestService.reviewLabMembershipRequest(requestId, username, requestStatus, reviewMessage);
+            LabMembershipRequestDto result = membershipRequestService.reviewLabMembershipRequest(requestId, username, status.toUpperCase(), reviewMessage);
             return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
@@ -3118,8 +3117,7 @@ public class UserController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("status is required");
             }
             
-            TeamMembershipRequest.RequestStatus requestStatus = TeamMembershipRequest.RequestStatus.valueOf(status.toUpperCase());
-            TeamMembershipRequestDto result = membershipRequestService.reviewTeamMembershipRequest(requestId, username, requestStatus, reviewMessage);
+            TeamMembershipRequestDto result = membershipRequestService.reviewTeamMembershipRequest(requestId, username, status.toUpperCase(), reviewMessage);
             return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
@@ -3134,9 +3132,15 @@ public class UserController {
     @GetMapping("/team-membership-requests/my-requests")
     public ResponseEntity<?> getMyTeamMembershipRequests(@RequestHeader("X-Username") String username) {
         try {
+            System.out.println("🔍 Loading team membership requests for user: " + username);
             List<TeamMembershipRequestDto> requests = membershipRequestService.getTeamMembershipRequestsByUser(username);
+            System.out.println("🔍 Found " + requests.size() + " team membership requests for user: " + username);
+            System.out.println("🔍 Requests: " + requests);
             return ResponseEntity.ok(requests);
         } catch (Exception e) {
+            System.out.println("🔍 Error loading team membership requests for user " + username + ": " + e.getMessage());
+            System.out.println("🔍 Error type: " + e.getClass().getSimpleName());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving team membership requests: " + e.getMessage());
         }
     }
@@ -3156,6 +3160,42 @@ public class UserController {
             return ResponseEntity.ok(requests);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving pending team membership requests: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Withdraw a team membership request
+     */
+    @PostMapping("/team-membership-requests/{requestId}/withdraw")
+    public ResponseEntity<?> withdrawTeamMembershipRequest(@PathVariable Long requestId, @RequestHeader("X-Username") String username) {
+        System.out.println("🔍 Controller: Withdrawing team membership request ID: " + requestId + " for user: " + username);
+        try {
+            membershipRequestService.withdrawTeamMembershipRequest(requestId, username);
+            System.out.println("🔍 Controller: Withdrawal successful");
+            return ResponseEntity.ok("Application withdrawn successfully");
+        } catch (RuntimeException e) {
+            System.out.println("🔍 Controller: RuntimeException during withdrawal: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            System.out.println("🔍 Controller: Exception during withdrawal: " + e.getMessage());
+            System.out.println("🔍 Controller: Exception type: " + e.getClass().getSimpleName());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error withdrawing team membership request: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Withdraw a lab membership request
+     */
+    @PostMapping("/lab-membership-requests/{requestId}/withdraw")
+    public ResponseEntity<?> withdrawLabMembershipRequest(@PathVariable Long requestId, @RequestHeader("X-Username") String username) {
+        try {
+            membershipRequestService.withdrawLabMembershipRequest(requestId, username);
+            return ResponseEntity.ok("Application withdrawn successfully");
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error withdrawing lab membership request: " + e.getMessage());
         }
     }
     

@@ -36,4 +36,7 @@ public interface LabInvitationRepository extends JpaRepository<LabInvitation, Lo
     
     @Query("SELECT COUNT(i) FROM LabInvitation i WHERE i.invitedUser.username = :username AND i.status = 'PENDING'")
     long countPendingInvitationsByUsername(@Param("username") String username);
+    
+    // Delete methods for Super Admin
+    void deleteByLabId(Long labId);
 }

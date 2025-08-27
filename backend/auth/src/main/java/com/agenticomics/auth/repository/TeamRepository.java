@@ -24,6 +24,8 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
     
     List<Team> findByLabId(Long labId);
     
+    long countByLabId(Long labId);
+    
     List<Team> findByTeamLeaderId(Long teamLeaderId);
     
     @Query("SELECT t FROM Team t WHERE t.lab.id = :labId AND t.isActive = true")

@@ -32,9 +32,8 @@ public class TeamMembershipRequest {
     @Column(name = "request_message", columnDefinition = "TEXT")
     private String requestMessage; // Optional message from the user
     
-    @Column(name = "status")
-    @Enumerated(EnumType.STRING)
-    private RequestStatus status = RequestStatus.PENDING; // PENDING, APPROVED, REJECTED
+    @Column(name = "status", columnDefinition = "VARCHAR(20) CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'))")
+    private String status = "PENDING"; // PENDING, APPROVED, REJECTED, WITHDRAWN
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reviewed_by")
@@ -51,12 +50,6 @@ public class TeamMembershipRequest {
     
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-    
-    public enum RequestStatus {
-        PENDING,
-        APPROVED,
-        REJECTED
-    }
     
     @PrePersist
     protected void onCreate() {

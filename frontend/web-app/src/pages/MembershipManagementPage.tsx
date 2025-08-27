@@ -154,6 +154,8 @@ const MembershipManagementPage: React.FC = () => {
   const [teamInvitations, setTeamInvitations] = useState<TeamInvitation[]>([]);
   const [pendingLabApprovals, setPendingLabApprovals] = useState<LabInvitation[]>([]);
   const [pendingTeamApprovals, setPendingTeamApprovals] = useState<TeamInvitation[]>([]);
+  const [pendingLabApplications, setPendingLabApplications] = useState<LabMembershipRequest[]>([]);
+  const [pendingTeamApplications, setPendingTeamApplications] = useState<TeamMembershipRequest[]>([]);
   const [labs, setLabs] = useState<Lab[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [userLabs, setUserLabs] = useState<Lab[]>([]);
@@ -223,16 +225,7 @@ const MembershipManagementPage: React.FC = () => {
     response: 'ACCEPTED'
   });
 
-  // Unified Management states (for PI and Super Admin)
-  const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [showDeactivated, setShowDeactivated] = useState(true); // Show all users by default
-  const [userSearchTerm, setUserSearchTerm] = useState('');
-  const [userRoleFilter, setUserRoleFilter] = useState('all');
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean;
-    user: any | null;
-    action: 'activate' | 'deactivate' | null;
-  }>({ open: false, user: null, action: null });
+
   
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [selectedInvitation, setSelectedInvitation] = useState<any>(null);
@@ -305,25 +298,44 @@ const MembershipManagementPage: React.FC = () => {
   // Load data for Manage Members tab (for both PI/Team Leader and Super Admin)
   useEffect(() => {
     if (tabValue === 5) {
-      // Load managed labs and teams for both roles
-      loadManagedLabsAndTeams();
-      
-      // Load users for Super Admin's Organization Users tab
-      if (role === 'Super Admin' && membershipTabValue === 2) {
-        loadAllUsersForManagement();
+      if (role === 'Super Admin') {
+        // For Super Admin, load all labs and teams with member data
+        loadAllLabsForSuperAdmin();
+        loadAllTeamsForSuperAdmin();
+      } else {
+        // For other roles, load managed labs and teams
+        loadManagedLabsAndTeams();
       }
     }
   }, [tabValue, membershipTabValue, role]);
 
+  // Load initial data when component mounts
+  useEffect(() => {
+    console.log('🔍 useEffect triggered - username:', username, 'token:', token ? 'present' : 'missing');
+    if (username && token) {
+      console.log('🔍 Initial loadData triggered for user:', username);
+      loadData();
+    } else {
+      console.log('🔍 Cannot load data - missing username or token');
+    }
+  }, [username, token]);
+
   const loadData = async () => {
+    console.log('🔍 loadData called for user:', username);
     try {
       // Load user's requests
       const [labRequestsRes, teamRequestsRes, labInvitationsRes, teamInvitationsRes] = await Promise.all([
         fetch('/api/auth/lab-membership-requests/my-requests', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'X-Username': username || ''
+          }
         }),
         fetch('/api/auth/team-membership-requests/my-requests', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'X-Username': username || ''
+          }
         }),
         fetch('/api/auth/lab-invitations/my-invitations', {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -335,12 +347,21 @@ const MembershipManagementPage: React.FC = () => {
 
       if (labRequestsRes.ok) {
         const data = await labRequestsRes.json();
+        console.log('🔍 Loaded lab requests for user:', username, data);
         setLabRequests(data);
+      } else {
+        console.log('🔍 Failed to load lab requests:', labRequestsRes.status, labRequestsRes.statusText);
       }
       
       if (teamRequestsRes.ok) {
         const data = await teamRequestsRes.json();
+        console.log('🔍 Loaded team requests for user:', username, data);
+        console.log('🔍 Team requests length:', data.length);
         setTeamRequests(data);
+      } else {
+        console.log('🔍 Failed to load team requests:', teamRequestsRes.status, teamRequestsRes.statusText);
+        const errorText = await teamRequestsRes.text();
+        console.log('🔍 Error response body:', errorText);
       }
       
       if (labInvitationsRes.ok) {
@@ -419,6 +440,74 @@ const MembershipManagementPage: React.FC = () => {
         if (pendingTeamApprovalsRes.ok) {
           const data = await pendingTeamApprovalsRes.json();
           setPendingTeamApprovals(data);
+        }
+      }
+
+      // Load pending applications for PIs and Team Leaders
+      if (role === 'Lab PI' || role === 'Super Admin') {
+        // For Lab PIs, load applications for all labs they lead
+        const userLabsRes = await fetch('/api/auth/my-labs', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (userLabsRes.ok) {
+          const userLabs = await userLabsRes.json();
+          const piLabs = userLabs.filter((lab: any) => 
+            lab.roleInLab === 'Lab PI' && lab.isActive
+          );
+          
+          // Load applications for each lab the user leads
+          const allApplications = [];
+          for (const lab of piLabs) {
+            const pendingLabApplicationsRes = await fetch(`/api/auth/lab-membership-requests/lab/${lab.id}/pending`, {
+              headers: { 
+                'Authorization': `Bearer ${token}`,
+                'X-Username': username || ''
+              }
+            });
+            if (pendingLabApplicationsRes.ok) {
+              const data = await pendingLabApplicationsRes.json();
+              allApplications.push(...data);
+            }
+          }
+          setPendingLabApplications(allApplications);
+          console.log('🔍 Loaded pending lab applications for PI:', username, allApplications);
+        }
+      }
+
+      if (role === 'Team Leader' || role === 'Super Admin') {
+        console.log('🔍 Loading team applications for user:', username, 'with role:', role);
+        // For Team Leaders, load applications for all teams they lead
+        const userTeamsRes = await fetch('/api/auth/my-teams', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (userTeamsRes.ok) {
+          const userTeams = await userTeamsRes.json();
+          console.log('🔍 All user teams:', userTeams);
+          const leaderTeams = userTeams.filter((team: any) => 
+            team.roleInTeam === 'Team Leader' && team.isActive
+          );
+          
+          // Load applications for each team the user leads
+          const allApplications = [];
+          console.log('🔍 Team Leader teams:', leaderTeams);
+          for (const team of leaderTeams) {
+            console.log('🔍 Checking applications for team:', team.id, team.teamName);
+            const pendingTeamApplicationsRes = await fetch(`/api/auth/team-membership-requests/team/${team.id}/pending`, {
+              headers: { 
+                'Authorization': `Bearer ${token}`,
+                'X-Username': username || ''
+              }
+            });
+            if (pendingTeamApplicationsRes.ok) {
+              const data = await pendingTeamApplicationsRes.json();
+              console.log('🔍 Applications for team', team.id, ':', data);
+              allApplications.push(...data);
+            } else {
+              console.log('🔍 Failed to load applications for team', team.id, ':', pendingTeamApplicationsRes.status);
+            }
+          }
+          setPendingTeamApplications(allApplications);
+          console.log('🔍 Loaded pending team applications for Team Leader:', username, allApplications);
         }
       }
     } catch (error) {
@@ -535,6 +624,30 @@ const MembershipManagementPage: React.FC = () => {
     if (!token) return;
     
     try {
+      // For Super Admin, use the data already loaded from /admin/system/labs
+      if (role === 'Super Admin') {
+        console.log('Super Admin loading lab members for labId:', labId);
+        console.log('Available labs:', labs.map((l: any) => ({ id: l.id, name: l.labName, membersCount: l.members?.length })));
+        const lab = labs.find((l: any) => l.id === labId) as any;
+        console.log('Found lab:', lab);
+        if (lab && lab.members) {
+          const mappedMembers = lab.members
+            .filter((member: any) => member.username !== username) // Exclude current user
+            .map((member: any) => ({
+              username: member.username,
+              email: member.email || member.username + '@test.com',
+              roleInLab: member.roleInLab,
+              labName: lab.labName || 'Unknown Lab'
+            }));
+          setLabMembers(mappedMembers);
+          return;
+        } else {
+          console.error('Lab not found or no members data for Super Admin');
+          return;
+        }
+      }
+      
+      // For other roles, use the regular endpoint
       const [labResponse, usersResponse] = await Promise.all([
         fetch(`/api/auth/labs/${labId}/members`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -573,6 +686,31 @@ const MembershipManagementPage: React.FC = () => {
     if (!token) return;
     
     try {
+      // For Super Admin, use the data already loaded from /admin/system/teams
+      if (role === 'Super Admin') {
+        console.log('Super Admin loading team members for teamId:', teamId);
+        console.log('Available teams:', teams.map((t: any) => ({ id: t.id, name: t.teamName, membersCount: t.members?.length })));
+        const team = teams.find((t: any) => t.id === teamId) as any;
+        console.log('Found team:', team);
+        if (team && team.members) {
+          const mappedMembers = team.members
+            .filter((member: any) => member.username !== username) // Exclude current user
+            .map((member: any) => ({
+              username: member.username,
+              email: member.email || member.username + '@test.com',
+              roleInTeam: member.roleInTeam,
+              teamName: team.teamName || 'Unknown Team',
+              labName: team.labName || 'Unknown Lab'
+            }));
+          setTeamMembers(mappedMembers);
+          return;
+        } else {
+          console.error('Team not found or no members data for Super Admin');
+          return;
+        }
+      }
+      
+      // For other roles, use the regular endpoint
       const [teamResponse, usersResponse] = await Promise.all([
         fetch(`/api/auth/teams/${teamId}/members`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -612,18 +750,21 @@ const MembershipManagementPage: React.FC = () => {
     if (!token) return;
     
     try {
+
+      
       // Load labs where user is PI
       const managedLabsRes = await fetch('/api/auth/labs', { 
         headers: { 'Authorization': `Bearer ${token}` } 
       });
       if (managedLabsRes.ok) {
         const allLabs = await managedLabsRes.json();
-        // Filter labs where user is PI (this would need backend support)
-        setManagedLabs(allLabs.filter((lab: Lab) => 
+        // Filter labs where user is PI
+        const managedLabs = allLabs.filter((lab: Lab) => 
           userProfile?.labMemberships?.some((membership: any) => 
             membership.labId === lab.id && membership.roleInLab === 'Lab PI'
           )
-        ));
+        );
+        setManagedLabs(managedLabs);
       }
       
       // Load teams where user is leader
@@ -632,12 +773,13 @@ const MembershipManagementPage: React.FC = () => {
       });
       if (managedTeamsRes.ok) {
         const allTeams = await managedTeamsRes.json();
-        // Filter teams where user is leader (this would need backend support)
-        setManagedTeams(allTeams.filter((team: Team) => 
+        // Filter teams where user is leader
+        const managedTeams = allTeams.filter((team: Team) => 
           userProfile?.teamMemberships?.some((membership: any) => 
             membership.teamId === team.id && membership.roleInTeam === 'Team Leader'
           )
-        ));
+        );
+        setManagedTeams(managedTeams);
       }
     } catch (error) {
       console.error('Error loading managed labs and teams:', error);
@@ -663,73 +805,7 @@ const MembershipManagementPage: React.FC = () => {
   };
 
   // Unified Management functions (for PI and Super Admin)
-  const loadAllUsersForManagement = async () => {
-    if (!token) return;
-    
-    try {
-      // Use different endpoints based on user role
-      const endpoint = role === 'Super Admin' 
-        ? '/api/auth/admin/system/users' 
-        : '/api/auth/admin/users';
-      
-      const response = await fetch(endpoint, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Username': username || ''
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        // Handle different response formats
-        if (Array.isArray(data)) {
-          // Super Admin endpoint returns array directly
-          setAllUsers(data);
-        } else {
-          // Lab PI endpoint returns {users: [...]}
-          setAllUsers(data.users || []);
-        }
-      } else {
-        console.error('Failed to load users:', response.status, response.statusText);
-        setError('Failed to load users');
-      }
-    } catch (error) {
-      console.error('Error loading users:', error);
-      setError('Failed to load users');
-    }
-  };
 
-  const handleUserAction = async (user: any, action: 'activate' | 'deactivate') => {
-    if (!token) return;
-    
-    try {
-      // Use different endpoints based on user role
-      const endpoint = role === 'Super Admin' 
-        ? `/api/auth/admin/system/users/${user.id}/${action}`
-        : `/api/auth/admin/users/${user.id}/${action}`;
-      
-      const response = await fetch(endpoint, {
-        method: 'POST', // Both Super Admin and Lab PI endpoints use POST
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Username': username || '',
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        setSuccess(`User ${user.username} ${action}d successfully`);
-        loadAllUsersForManagement();
-      } else {
-        const errorText = await response.text();
-        console.error(`Failed to ${action} user:`, response.status, errorText);
-        setError(`Failed to ${action} user: ${errorText}`);
-      }
-    } catch (error) {
-      console.error(`Error ${action}ing user:`, error);
-      setError(`Failed to ${action} user`);
-    }
-  };
 
   const handleDeleteLab = async (labId: number, labName: string) => {
     setDeleteConfirmationTarget({ type: 'lab', id: labId, name: labName });
@@ -802,15 +878,17 @@ const MembershipManagementPage: React.FC = () => {
     if (!token) return;
     
     try {
-      // Try the regular labs endpoint first
-      const response = await fetch('/api/auth/labs', {
+      // Use Super Admin specific endpoint that includes member information
+      const response = await fetch('/api/auth/admin/system/labs', {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || ''
         }
       });
       
       if (response.ok) {
         const data = await response.json();
+        console.log('🔍 Super Admin labs data received:', data);
         setLabs(data);
       } else {
         const errorText = await response.text();
@@ -827,16 +905,17 @@ const MembershipManagementPage: React.FC = () => {
     if (!token) return;
     
     try {
-      // Try the regular teams endpoint first
-      const response = await fetch('/api/auth/teams', {
+      // Use Super Admin specific endpoint that includes member information
+      const response = await fetch('/api/auth/admin/system/teams', {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || ''
         }
       });
       
       if (response.ok) {
         const data = await response.json();
-        console.log('🔍 Team data received:', data);
+        console.log('🔍 Super Admin teams data received:', data);
         setTeams(data);
       } else {
         const errorText = await response.text();
@@ -1022,16 +1101,19 @@ const MembershipManagementPage: React.FC = () => {
 
   const handleRequestSubmit = async () => {
     try {
-      const endpoint = tabValue === 0 ? '/api/auth/lab-membership-requests' : '/api/auth/team-membership-requests';
-      const body = tabValue === 0 
+      const endpoint = applicationTabValue === 0 ? '/api/auth/lab-membership-requests' : '/api/auth/team-membership-requests';
+      const body = applicationTabValue === 0 
         ? { labId: parseInt(requestForm.labId), requestedRole: requestForm.requestedRole, requestMessage: requestForm.requestMessage }
         : { teamId: parseInt(requestForm.teamId), requestedRole: requestForm.requestedRole, requestMessage: requestForm.requestMessage };
+
+      console.log('🔍 Submitting application with:', { endpoint, body, applicationTabValue });
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || ''
         },
         body: JSON.stringify(body)
       });
@@ -1188,12 +1270,71 @@ const MembershipManagementPage: React.FC = () => {
     }
   };
 
+  const handleApplicationReview = async (applicationId: number, status: string, type: 'lab' | 'team', reviewMessage?: string) => {
+    try {
+      const endpoint = type === 'lab' 
+        ? `/api/auth/lab-membership-requests/${applicationId}/review`
+        : `/api/auth/team-membership-requests/${applicationId}/review`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || ''
+        },
+        body: JSON.stringify({
+          status: status,
+          reviewMessage: reviewMessage || ''
+        })
+      });
+
+      if (response.ok) {
+        setSuccess(`Application ${status.toLowerCase()} successfully`);
+        loadData();
+      } else {
+        const error = await response.text();
+        setError(error);
+      }
+    } catch (error) {
+      setError('Failed to submit application review');
+    }
+  };
+
+  const handleApplicationWithdrawal = async (applicationId: number, type: 'lab' | 'team') => {
+    try {
+      const endpoint = type === 'lab' 
+        ? `/api/auth/lab-membership-requests/${applicationId}/withdraw`
+        : `/api/auth/team-membership-requests/${applicationId}/withdraw`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Username': username || ''
+        }
+      });
+
+      if (response.ok) {
+        setSuccess('Application withdrawn successfully');
+        loadData();
+      } else {
+        const error = await response.text();
+        setError(error);
+      }
+    } catch (error) {
+      setError('Failed to withdraw application');
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PENDING_APPROVAL': return 'info';
       case 'PENDING': return 'warning';
       case 'APPROVED': case 'ACCEPTED': return 'success';
       case 'REJECTED': case 'DECLINED': return 'error';
+      case 'WITHDRAWN': return 'default';
       case 'EXPIRED': return 'default';
       default: return 'default';
     }
@@ -1265,12 +1406,20 @@ const MembershipManagementPage: React.FC = () => {
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
             <Typography variant="h6">My Applications</Typography>
-            <Button variant="contained" onClick={() => setRequestDialogOpen(true)}>
-              Apply to Join Lab/Team
-            </Button>
+            <Box>
+              <Button variant="outlined" onClick={loadData} sx={{ mr: 1 }}>
+                Refresh Data
+              </Button>
+              <Button variant="contained" onClick={() => setRequestDialogOpen(true)}>
+                Apply to Join Lab/Team
+              </Button>
+            </Box>
           </Box>
           
-          <Tabs value={applicationTabValue} onChange={(_, newValue) => setApplicationTabValue(newValue)} sx={{ mb: 2 }}>
+          <Tabs value={applicationTabValue} onChange={(_, newValue) => {
+            console.log('🔍 Application tab changed from', applicationTabValue, 'to', newValue);
+            setApplicationTabValue(newValue);
+          }} sx={{ mb: 2 }}>
             <Tab label="Lab Applications" />
             <Tab label="Team Applications" />
           </Tabs>
@@ -1300,6 +1449,18 @@ const MembershipManagementPage: React.FC = () => {
                       <Typography variant="caption" display="block" sx={{ mt: 1 }}>
                         Requested: {formatDateTime(request.createdAt)}
                       </Typography>
+                      {request.status === 'PENDING' && (
+                        <Box sx={{ mt: 2 }}>
+                          <Button 
+                            variant="outlined" 
+                            color="warning" 
+                            size="small"
+                            onClick={() => handleApplicationWithdrawal(request.id, 'lab')}
+                          >
+                            Withdraw Application
+                          </Button>
+                        </Box>
+                      )}
                     </CardContent>
                   </Card>
                 </Grid>
@@ -1318,7 +1479,7 @@ const MembershipManagementPage: React.FC = () => {
                         <Typography variant="h6">{request.teamName}</Typography>
                         <Chip label={request.status} color={getStatusColor(request.status) as any} />
                       </Box>
-                      <Typography color="textSecondary">Lab: {request.labName}</Typography>
+                      {/* Removed Lab display for team applications - teams are independent */}
                       <Typography color="textSecondary">Role: {request.requestedRole}</Typography>
                       {request.requestMessage && (
                         <Typography variant="body2" sx={{ mt: 1 }}>
@@ -1333,6 +1494,18 @@ const MembershipManagementPage: React.FC = () => {
                       <Typography variant="caption" display="block" sx={{ mt: 1 }}>
                         Requested: {formatDateTime(request.createdAt)}
                       </Typography>
+                      {request.status === 'PENDING' && (
+                        <Box sx={{ mt: 2 }}>
+                          <Button 
+                            variant="outlined" 
+                            color="warning" 
+                            size="small"
+                            onClick={() => handleApplicationWithdrawal(request.id, 'team')}
+                          >
+                            Withdraw Application
+                          </Button>
+                        </Box>
+                      )}
                     </CardContent>
                   </Card>
                 </Grid>
@@ -1679,6 +1852,119 @@ const MembershipManagementPage: React.FC = () => {
               You don't have permission to approve invitations. Only Lab PIs, Team Leaders, and Super Admins can approve invitations.
             </Alert>
           )}
+
+          {/* Lab Applications Pending Review */}
+          {(role === 'Super Admin' || userProfile?.labMemberships?.some((membership: any) => membership.roleInLab === 'Lab PI' && membership.isActive)) && (
+            <Box sx={{ mb: 4, mt: 4 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>Lab Applications Pending Review</Typography>
+              <Grid container spacing={2}>
+                {pendingLabApplications.map((application) => (
+                  <Grid item xs={12} md={6} key={application.id}>
+                    <Card>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="h6">{application.labName}</Typography>
+                          <Chip label={application.status} color={getStatusColor(application.status) as any} />
+                        </Box>
+                        <Typography color="textSecondary">Applicant: {application.username}</Typography>
+                        <Typography color="textSecondary">Email: {application.userEmail}</Typography>
+                        <Typography color="textSecondary">Requested Role: {application.requestedRole}</Typography>
+                        <Typography color="textSecondary">Applied: {formatDateTime(application.createdAt)}</Typography>
+                        {application.requestMessage && (
+                          <Typography variant="body2" sx={{ mt: 1 }}>
+                            Message: {application.requestMessage}
+                          </Typography>
+                        )}
+                        {application.status === 'PENDING' && (
+                          <Box sx={{ mt: 2 }}>
+                            <Button 
+                              variant="contained" 
+                              color="success" 
+                              size="small" 
+                              sx={{ mr: 1 }}
+                              onClick={() => handleApplicationReview(application.id, 'APPROVED', 'lab')}
+                            >
+                              Approve
+                            </Button>
+                            <Button 
+                              variant="contained" 
+                              color="error" 
+                              size="small"
+                              onClick={() => handleApplicationReview(application.id, 'REJECTED', 'lab')}
+                            >
+                              Reject
+                            </Button>
+                          </Box>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+                {pendingLabApplications.length === 0 && (
+                  <Grid item xs={12}>
+                    <Alert severity="info">No lab applications pending review.</Alert>
+                  </Grid>
+                )}
+              </Grid>
+            </Box>
+          )}
+
+          {/* Team Applications Pending Review */}
+          {(role === 'Super Admin' || userProfile?.teamMemberships?.some((membership: any) => membership.roleInTeam === 'Team Leader' && membership.isActive)) && (
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>Team Applications Pending Review</Typography>
+              <Grid container spacing={2}>
+                {pendingTeamApplications.map((application) => (
+                  <Grid item xs={12} md={6} key={application.id}>
+                    <Card>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="h6">{application.teamName}</Typography>
+                          <Chip label={application.status} color={getStatusColor(application.status) as any} />
+                        </Box>
+                        <Typography color="textSecondary">Applicant: {application.username}</Typography>
+                        <Typography color="textSecondary">Email: {application.userEmail}</Typography>
+                        {/* Removed Lab display for team applications - teams are independent */}
+                        <Typography color="textSecondary">Requested Role: {application.requestedRole}</Typography>
+                        <Typography color="textSecondary">Applied: {formatDateTime(application.createdAt)}</Typography>
+                        {application.requestMessage && (
+                          <Typography variant="body2" sx={{ mt: 1 }}>
+                            Message: {application.requestMessage}
+                          </Typography>
+                        )}
+                        {application.status === 'PENDING' && (
+                          <Box sx={{ mt: 2 }}>
+                            <Button 
+                              variant="contained" 
+                              color="success" 
+                              size="small" 
+                              sx={{ mr: 1 }}
+                              onClick={() => handleApplicationReview(application.id, 'APPROVED', 'team')}
+                            >
+                              Approve
+                            </Button>
+                            <Button 
+                              variant="contained" 
+                              color="error" 
+                              size="small"
+                              onClick={() => handleApplicationReview(application.id, 'REJECTED', 'team')}
+                            >
+                              Reject
+                            </Button>
+                          </Box>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+                {pendingTeamApplications.length === 0 && (
+                  <Grid item xs={12}>
+                    <Alert severity="info">No team applications pending review.</Alert>
+                  </Grid>
+                )}
+              </Grid>
+            </Box>
+          )}
         </Box>
       )}
 
@@ -1849,14 +2135,11 @@ const MembershipManagementPage: React.FC = () => {
             Overview of all labs across the platform with detailed information and management capabilities.
           </Typography>
           
-          <Card sx={{ mb: 3, p: 2, bgcolor: 'primary.light', color: 'white' }}>
+          <Card sx={{ mb: 3, p: 2, bgcolor: 'primary.main', color: 'white' }}>
             <Typography variant="h6">Platform Summary</Typography>
             <Typography variant="body2">
               Total Labs: {labs.length} | Active Labs: {labs.filter(lab => lab.isActive).length} | 
               Total Lab Members: {labs.reduce((sum, lab) => sum + (lab.memberCount || 0), 0)}
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 1, fontSize: '0.8rem' }}>
-              Debug: labs state length = {labs.length}
             </Typography>
           </Card>
           
@@ -1867,7 +2150,6 @@ const MembershipManagementPage: React.FC = () => {
                   <TableCell><strong>Lab Name</strong></TableCell>
                   <TableCell><strong>PI</strong></TableCell>
                   <TableCell><strong>Members</strong></TableCell>
-                  <TableCell><strong>Teams</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Created</strong></TableCell>
                   <TableCell><strong>Actions</strong></TableCell>
@@ -1902,14 +2184,6 @@ const MembershipManagementPage: React.FC = () => {
                         label={`${lab.memberCount || 0} members`}
                         size="small"
                         color="secondary"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={`${lab.teamCount || 0} teams`}
-                        size="small"
-                        color="info"
                         variant="outlined"
                       />
                     </TableCell>
@@ -1956,75 +2230,44 @@ const MembershipManagementPage: React.FC = () => {
               </Typography>
             </Alert>
           )}
-        </Box>
-      )}
-
-      {/* Lab Members Management (Unified Management) */}
-      {tabValue === 7 && (role === 'Lab PI' || role === 'Super Admin') && (
-        <Box>
-          <Typography variant="h6" sx={{ mb: 2 }}>Lab Members Overview</Typography>
-          <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-            Overview of all labs you manage as PI. Click "View Members" to see detailed member lists.
-          </Typography>
-          {managedLabs.length === 0 ? (
-            <Alert severity="info">
-              You are not a Lab PI of any labs. Only Lab PIs can manage lab members.
-            </Alert>
-          ) : (
-            <>
-              <Card sx={{ mb: 3, bgcolor: 'primary.light', color: 'white' }}>
-                <CardContent>
-                  <Typography variant="h6">Summary</Typography>
-                  <Typography variant="body2">
-                    You are managing {managedLabs.length} lab{managedLabs.length !== 1 ? 's' : ''} as PI
-                  </Typography>
-                </CardContent>
-              </Card>
-              <Grid container spacing={2}>
-              {managedLabs.map((lab) => (
-                <Grid item xs={12} md={6} key={lab.id}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6">{lab.labName}</Typography>
-                      <Typography color="textSecondary">Lab ID: {lab.labId}</Typography>
-                      <Typography color="textSecondary">Description: {lab.labDescription}</Typography>
-                      <Button 
-                        variant="outlined" 
-                        size="small"
-                        onClick={() => loadLabMembersForManagement(lab.id)}
-                        sx={{ mt: 1 }}
-                      >
-                        View Members
-                      </Button>
-                      {labMembers.length > 0 && (
-                        <List sx={{ mt: 2 }}>
-                          {labMembers.map((member) => (
-                            <ListItem key={member.username} divider>
-                              <ListItemText
-                                primary={member.username}
-                                secondary={`${member.email} - ${member.roleInLab || 'Member'}`}
-                              />
-                              <Button 
-                                variant="outlined" 
-                                color="error" 
-                                size="small"
-                                onClick={() => openRemoveMemberDialog('lab', member)}
-                              >
-                                Remove
-                              </Button>
-                            </ListItem>
-                          ))}
-                        </List>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-            </>
+          
+          {/* Lab Members Display */}
+          {labMembers.length > 0 && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>Lab Members</Typography>
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>Username</strong></TableCell>
+                      <TableCell><strong>Email</strong></TableCell>
+                      <TableCell><strong>Role in Lab</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {labMembers.map((member) => (
+                      <TableRow key={member.username}>
+                        <TableCell>{member.username}</TableCell>
+                        <TableCell>{member.email}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={member.roleInLab} 
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
           )}
         </Box>
       )}
+
+
 
       {/* Team Overview (for Super Admin) */}
       {tabValue === 7 && role === 'Super Admin' && (
@@ -2034,14 +2277,11 @@ const MembershipManagementPage: React.FC = () => {
             Overview of all teams across the platform with detailed information and management capabilities.
           </Typography>
           
-          <Card sx={{ mb: 3, p: 2, bgcolor: 'secondary.light', color: 'white' }}>
+          <Card sx={{ mb: 3, p: 2, bgcolor: 'info.dark', color: 'white' }}>
             <Typography variant="h6">Platform Summary</Typography>
             <Typography variant="body2">
               Total Teams: {teams.length} | Active Teams: {teams.filter(team => team.isActive).length} | 
               Total Team Members: {teams.reduce((sum, team) => sum + (team.memberCount || 0), 0)}
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 1, fontSize: '0.8rem' }}>
-              Debug: teams state length = {teams.length}
             </Typography>
           </Card>
           
@@ -2050,7 +2290,6 @@ const MembershipManagementPage: React.FC = () => {
               <TableHead>
                 <TableRow>
                   <TableCell><strong>Team Name</strong></TableCell>
-                  <TableCell><strong>Lab</strong></TableCell>
                   <TableCell><strong>Leader</strong></TableCell>
                   <TableCell><strong>Members</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
@@ -2076,19 +2315,12 @@ const MembershipManagementPage: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Chip 
-                        label={team.labName || 'No Lab'} 
-                        size="small"
-                        color={team.labName ? 'primary' : 'default'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
                         label={team.leaderUsername || 'No Leader'} 
                         size="small"
                         color={team.leaderUsername ? 'secondary' : 'default'}
                         variant="outlined"
                       />
+                      {/* Debug: {JSON.stringify({ leaderUsername: team.leaderUsername, leaderId: team.leaderId })} */}
                     </TableCell>
                     <TableCell>
                       <Chip 
@@ -2141,6 +2373,40 @@ const MembershipManagementPage: React.FC = () => {
               </Typography>
             </Alert>
           )}
+          
+          {/* Team Members Display */}
+          {teamMembers.length > 0 && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>Team Members</Typography>
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>Username</strong></TableCell>
+                      <TableCell><strong>Email</strong></TableCell>
+                      <TableCell><strong>Role in Team</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {teamMembers.map((member) => (
+                      <TableRow key={member.username}>
+                        <TableCell>{member.username}</TableCell>
+                        <TableCell>{member.email}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={member.roleInTeam} 
+                            size="small"
+                            color="secondary"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          )}
         </Box>
       )}
 
@@ -2152,7 +2418,7 @@ const MembershipManagementPage: React.FC = () => {
           </Typography>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
             {role === 'Super Admin' 
-              ? 'Manage members within your organizations. For platform-wide user management, use the User Management tab.'
+              ? 'Manage members across all labs and teams in the platform. For platform-wide user management, use the System Administration panel.'
               : 'Manage members within your organizations (labs and teams you lead).'
             }
           </Typography>
@@ -2160,20 +2426,24 @@ const MembershipManagementPage: React.FC = () => {
           <Tabs value={membershipTabValue} onChange={(_, newValue) => setMembershipTabValue(newValue)} sx={{ mb: 2 }}>
             <Tab label="Lab Members" />
             <Tab label="Team Members" />
-            {role === 'Super Admin' && <Tab label="Organization Users" />}
           </Tabs>
           
           {/* Lab Members Management */}
           {membershipTabValue === 0 && (
             <Box>
-              <Typography variant="h6" sx={{ mb: 2 }}>Lab Members Management</Typography>
-              {managedLabs.length === 0 ? (
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                {role === 'Super Admin' ? 'All Lab Members Management' : 'Lab Members Management'}
+              </Typography>
+              {(role === 'Super Admin' ? labs.length : managedLabs.length) === 0 ? (
                 <Alert severity="info">
-                  You are not a Lab PI of any labs. Only Lab PIs can manage lab members.
+                  {role === 'Super Admin' 
+                    ? 'No labs found in the platform.' 
+                    : 'You are not a Lab PI of any labs. Only Lab PIs can manage lab members.'
+                  }
                 </Alert>
               ) : (
                 <Grid container spacing={2}>
-                  {managedLabs.map((lab) => (
+                  {(role === 'Super Admin' ? labs : managedLabs).map((lab) => (
                     <Grid item xs={12} md={6} key={lab.id}>
                       <Card>
                         <CardContent>
@@ -2195,14 +2465,23 @@ const MembershipManagementPage: React.FC = () => {
                                     primary={member.username}
                                     secondary={member.email}
                                   />
-                                  <Button 
-                                    variant="outlined" 
-                                    color="error" 
-                                    size="small"
-                                    onClick={() => openRemoveMemberDialog('lab', member)}
-                                  >
-                                    Remove
-                                  </Button>
+                                  {role === 'Super Admin' && member.roleInLab === 'Lab PI' ? (
+                                    <Chip 
+                                      label="Cannot Remove PI" 
+                                      size="small"
+                                      color="warning"
+                                      variant="outlined"
+                                    />
+                                  ) : (
+                                    <Button 
+                                      variant="outlined" 
+                                      color="error" 
+                                      size="small"
+                                      onClick={() => openRemoveMemberDialog('lab', member)}
+                                    >
+                                      Remove
+                                    </Button>
+                                  )}
                                 </ListItem>
                               ))}
                             </List>
@@ -2219,14 +2498,19 @@ const MembershipManagementPage: React.FC = () => {
           {/* Team Members Management */}
           {membershipTabValue === 1 && (
             <Box>
-              <Typography variant="h6" sx={{ mb: 2 }}>Team Members Management</Typography>
-              {managedTeams.length === 0 ? (
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                {role === 'Super Admin' ? 'All Team Members Management' : 'Team Members Management'}
+              </Typography>
+              {(role === 'Super Admin' ? teams.length : managedTeams.length) === 0 ? (
                 <Alert severity="info">
-                  You are not a Team Leader of any teams. Only Team Leaders can manage team members.
+                  {role === 'Super Admin' 
+                    ? 'No teams found in the platform.' 
+                    : 'You are not a Team Leader of any teams. Only Team Leaders can manage team members.'
+                  }
                 </Alert>
               ) : (
                 <Grid container spacing={2}>
-                  {managedTeams.map((team) => (
+                  {(role === 'Super Admin' ? teams : managedTeams).map((team) => (
                     <Grid item xs={12} md={6} key={team.id}>
                       <Card>
                         <CardContent>
@@ -2249,14 +2533,23 @@ const MembershipManagementPage: React.FC = () => {
                                     primary={member.username}
                                     secondary={member.email}
                                   />
-                                  <Button 
-                                    variant="outlined" 
-                                    color="error" 
-                                    size="small"
-                                    onClick={() => openRemoveMemberDialog('team', member)}
-                                  >
-                                    Remove
-                                  </Button>
+                                  {role === 'Super Admin' && member.roleInTeam === 'Team Leader' ? (
+                                    <Chip 
+                                      label="Cannot Remove Leader" 
+                                      size="small"
+                                      color="warning"
+                                      variant="outlined"
+                                    />
+                                  ) : (
+                                    <Button 
+                                      variant="outlined" 
+                                      color="error" 
+                                      size="small"
+                                      onClick={() => openRemoveMemberDialog('team', member)}
+                                    >
+                                      Remove
+                                    </Button>
+                                  )}
                                 </ListItem>
                               ))}
                             </List>
@@ -2270,80 +2563,7 @@ const MembershipManagementPage: React.FC = () => {
             </Box>
           )}
 
-          {/* Organization Users Management (Super Admin only) */}
-          {membershipTabValue === 2 && role === 'Super Admin' && (
-            <Box>
-              <Typography variant="h6" sx={{ mb: 2 }}>Organization Users Management</Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-                Manage users within your organizations (labs and teams you lead).
-              </Typography>
-              
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6">Organization Users</Typography>
-                <Button 
-                  variant="outlined" 
-                  onClick={() => setShowDeactivated(!showDeactivated)}
-                >
-                  {showDeactivated ? 'Hide' : 'Show'} Deactivated Users
-                </Button>
-              </Box>
-              
-              <TableContainer component={Paper}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Username</TableCell>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Role</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Created</TableCell>
-                      <TableCell>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {allUsers
-                      .filter(user => showDeactivated || user.isActive)
-                      .map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell>{user.username}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>{user.role}</TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={user.isActive ? 'Active' : 'Inactive'} 
-                              color={user.isActive ? 'success' : 'error'} 
-                              size="small" 
-                            />
-                          </TableCell>
-                          <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            {user.isActive ? (
-                              <Button 
-                                variant="outlined" 
-                                color="error" 
-                                size="small"
-                                onClick={() => setConfirmDialog({ open: true, user, action: 'deactivate' })}
-                              >
-                                Deactivate
-                              </Button>
-                            ) : (
-                              <Button 
-                                variant="outlined" 
-                                color="success" 
-                                size="small"
-                                onClick={() => setConfirmDialog({ open: true, user, action: 'activate' })}
-                              >
-                                Activate
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          )}
+
         </Box>
       )}
 
@@ -2357,25 +2577,96 @@ const MembershipManagementPage: React.FC = () => {
             <InputLabel>{applicationTabValue === 0 ? 'Lab' : 'Team'}</InputLabel>
             <Select
               value={applicationTabValue === 0 ? requestForm.labId : requestForm.teamId}
-              onChange={(e) => setRequestForm({
-                ...requestForm,
-                [applicationTabValue === 0 ? 'labId' : 'teamId']: e.target.value
-              })}
+              onChange={(e) => {
+                const selectedId = e.target.value;
+                setRequestForm({
+                  ...requestForm,
+                  [applicationTabValue === 0 ? 'labId' : 'teamId']: selectedId,
+                  requestedRole: '' // Reset role when lab/team changes
+                });
+              }}
             >
-              {(applicationTabValue === 0 ? labs : teams).map((item) => (
-                <MenuItem key={item.id} value={item.id}>
-                  {applicationTabValue === 0 ? (item as Lab).labName : (item as Team).teamName}
-                </MenuItem>
-              ))}
+              {(applicationTabValue === 0 ? labs : teams)
+                .filter((item) => {
+                  // Filter out labs/teams the user is already a member of
+                  if (applicationTabValue === 0) {
+                    // For labs, check if user is already a member
+                    return !userProfile?.labMemberships?.some((membership: any) => 
+                      membership.labId === item.id
+                    );
+                  } else {
+                    // For teams, check if user is already a member
+                    return !userProfile?.teamMemberships?.some((membership: any) => 
+                      membership.teamId === item.id
+                    );
+                  }
+                })
+                .map((item) => (
+                  <MenuItem key={item.id} value={item.id}>
+                    {applicationTabValue === 0 ? (item as Lab).labName : (item as Team).teamName}
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
-          <TextField
-            fullWidth
-            label="Requested Role"
-            value={requestForm.requestedRole}
-            onChange={(e) => setRequestForm({ ...requestForm, requestedRole: e.target.value })}
-            sx={{ mt: 2 }}
-          />
+          
+          {/* Show message if no available labs/teams */}
+          {(applicationTabValue === 0 ? labs : teams)
+            .filter((item) => {
+              if (applicationTabValue === 0) {
+                return !userProfile?.labMemberships?.some((membership: any) => 
+                  membership.labId === item.id
+                );
+              } else {
+                return !userProfile?.teamMemberships?.some((membership: any) => 
+                  membership.teamId === item.id
+                );
+              }
+            }).length === 0 && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              {applicationTabValue === 0 
+                ? 'You are already a member of all available labs.' 
+                : 'You are already a member of all available teams.'
+              }
+            </Alert>
+          )}
+          
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel>Requested Role</InputLabel>
+            <Select
+              value={requestForm.requestedRole}
+              onChange={(e) => setRequestForm({ ...requestForm, requestedRole: e.target.value })}
+              disabled={!requestForm.labId && !requestForm.teamId}
+            >
+              {applicationTabValue === 0 ? (
+                // Lab roles
+                [
+                  { value: 'PhD Student', label: 'PhD Student' },
+                  { value: 'Master Student', label: 'Master Student' },
+                  { value: 'Postdoc', label: 'Postdoc' },
+                  { value: 'Data Analyst', label: 'Data Analyst' },
+                  { value: 'Technician', label: 'Technician' },
+                  { value: 'Professor', label: 'Professor' }
+                ].map((role) => (
+                  <MenuItem key={role.value} value={role.value}>
+                    {role.label}
+                  </MenuItem>
+                ))
+              ) : (
+                // Team roles
+                [
+                  { value: 'Senior Member', label: 'Senior Member' },
+                  { value: 'Junior Member', label: 'Junior Member' },
+                  { value: 'Data Specialist', label: 'Data Specialist' },
+                  { value: 'Technical Support', label: 'Technical Support' }
+                ].map((role) => (
+                  <MenuItem key={role.value} value={role.value}>
+                    {role.label}
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </FormControl>
+          
           <TextField
             fullWidth
             label="Message (Optional)"
@@ -2384,11 +2675,30 @@ const MembershipManagementPage: React.FC = () => {
             value={requestForm.requestMessage}
             onChange={(e) => setRequestForm({ ...requestForm, requestMessage: e.target.value })}
             sx={{ mt: 2 }}
+            placeholder="Please describe why you want to join this organization..."
           />
+          
+          {/* Validation Messages */}
+          {applicationTabValue === 0 && requestForm.labId && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              You are applying to join {(labs.find(l => l.id === parseInt(requestForm.labId)) as Lab)?.labName}
+            </Alert>
+          )}
+          {applicationTabValue === 1 && requestForm.teamId && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              You are applying to join {(teams.find(t => t.id === parseInt(requestForm.teamId)) as Team)?.teamName}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRequestDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleRequestSubmit} variant="contained">Submit</Button>
+          <Button 
+            onClick={handleRequestSubmit} 
+            variant="contained"
+            disabled={!requestForm.labId && !requestForm.teamId || !requestForm.requestedRole}
+          >
+            Submit Application
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -2696,58 +3006,7 @@ const MembershipManagementPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Confirmation Dialog for User Actions */}
-      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ open: false, user: null, action: null })}>
-        <DialogTitle>
-          {confirmDialog.action === 'activate' ? 'Activate' : 'Deactivate'} Platform User
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            Are you sure you want to <strong>{confirmDialog.action}</strong> user <strong>"{confirmDialog.user?.username}"</strong>?
-          </Typography>
-          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            {confirmDialog.action === 'activate' 
-              ? 'This will allow the user to access the platform again.'
-              : 'This will prevent the user from accessing the platform until reactivated.'
-            }
-          </Typography>
-          {confirmDialog.user?.role === 'Super Admin' && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              <Typography variant="body2">
-                <strong>Warning:</strong> This user is a Super Admin. {confirmDialog.action === 'deactivate' 
-                  ? 'Deactivating a Super Admin will remove their platform-wide administrative privileges.'
-                  : 'Activating a Super Admin will restore their platform-wide administrative privileges.'
-                }
-              </Typography>
-            </Alert>
-          )}
-          {confirmDialog.user?.role === 'Super Admin' && confirmDialog.user?.username === username && confirmDialog.action === 'deactivate' && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              <Typography variant="body2">
-                <strong>Critical Warning:</strong> You cannot deactivate your own account. This would lock you out of the platform.
-              </Typography>
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDialog({ open: false, user: null, action: null })}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={() => {
-              if (confirmDialog.user && confirmDialog.action) {
-                handleUserAction(confirmDialog.user, confirmDialog.action);
-                setConfirmDialog({ open: false, user: null, action: null });
-              }
-            }} 
-            variant="contained"
-            color={confirmDialog.action === 'activate' ? 'success' : 'error'}
-            disabled={confirmDialog.user?.role === 'Super Admin' && confirmDialog.user?.username === username && confirmDialog.action === 'deactivate'}
-          >
-            {confirmDialog.action === 'activate' ? 'Activate' : 'Deactivate'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+
 
       {/* Deletion Confirmation Dialog */}
       <Dialog open={deleteConfirmationDialogOpen} onClose={() => {

@@ -16,6 +16,8 @@ public interface UserLabMembershipRepository extends JpaRepository<UserLabMember
     
     List<UserLabMembership> findByLabIdAndIsActiveTrue(Long labId);
     
+    Optional<UserLabMembership> findByLabIdAndRoleInLabAndIsActiveTrue(Long labId, String roleInLab);
+    
     Optional<UserLabMembership> findByUserIdAndLabIdAndIsActiveTrue(Long userId, Long labId);
     
     Optional<UserLabMembership> findByUserIdAndIsPrimaryLabTrueAndIsActiveTrue(Long userId);

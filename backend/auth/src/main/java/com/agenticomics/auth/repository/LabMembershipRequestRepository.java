@@ -12,23 +12,23 @@ import java.util.Optional;
 @Repository
 public interface LabMembershipRequestRepository extends JpaRepository<LabMembershipRequest, Long> {
     
-    @Query("SELECT r FROM LabMembershipRequest r WHERE r.user.username = :username")
+    @Query("SELECT r FROM LabMembershipRequest r JOIN FETCH r.lab JOIN FETCH r.user WHERE r.user.username = :username")
     List<LabMembershipRequest> findByUsername(@Param("username") String username);
     
     @Query("SELECT r FROM LabMembershipRequest r WHERE r.lab.id = :labId")
     List<LabMembershipRequest> findByLabId(@Param("labId") Long labId);
     
     @Query("SELECT r FROM LabMembershipRequest r WHERE r.lab.id = :labId AND r.status = :status")
-    List<LabMembershipRequest> findByLabIdAndStatus(@Param("labId") Long labId, @Param("status") LabMembershipRequest.RequestStatus status);
+    List<LabMembershipRequest> findByLabIdAndStatus(@Param("labId") Long labId, @Param("status") String status);
     
     @Query("SELECT r FROM LabMembershipRequest r WHERE r.user.username = :username AND r.lab.id = :labId AND r.status = :status")
-    Optional<LabMembershipRequest> findByUsernameAndLabIdAndStatus(@Param("username") String username, @Param("labId") Long labId, @Param("status") LabMembershipRequest.RequestStatus status);
+    Optional<LabMembershipRequest> findByUsernameAndLabIdAndStatus(@Param("username") String username, @Param("labId") Long labId, @Param("status") String status);
     
     @Query("SELECT r FROM LabMembershipRequest r WHERE r.user.username = :username AND r.lab.id = :labId")
     List<LabMembershipRequest> findByUsernameAndLabId(@Param("username") String username, @Param("labId") Long labId);
     
     @Query("SELECT r FROM LabMembershipRequest r WHERE r.status = :status")
-    List<LabMembershipRequest> findByStatus(@Param("status") LabMembershipRequest.RequestStatus status);
+    List<LabMembershipRequest> findByStatus(@Param("status") String status);
     
     @Query("SELECT COUNT(r) FROM LabMembershipRequest r WHERE r.lab.id = :labId AND r.status = 'PENDING'")
     long countPendingRequestsByLabId(@Param("labId") Long labId);

@@ -10,6 +10,8 @@ import com.agenticomics.auth.entity.Lab;
 import com.agenticomics.auth.dto.UserTeamMembershipDto;
 import com.agenticomics.auth.entity.Team;
 import com.agenticomics.auth.repository.TeamRepository;
+import com.agenticomics.auth.repository.TeamInvitationRepository;
+import com.agenticomics.auth.repository.LabInvitationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -50,6 +52,12 @@ public class UserService {
     
     @Autowired
     private com.agenticomics.auth.repository.UserTeamMembershipRepository userTeamMembershipRepository;
+    
+    @Autowired
+    private TeamInvitationRepository teamInvitationRepository;
+    
+    @Autowired
+    private LabInvitationRepository labInvitationRepository;
     
     public User registerUser(String username, String password, String email, String telephone, String role) {
         // Check if user already exists
@@ -1022,6 +1030,19 @@ public class UserService {
             labInfo.put("department", lab.getDepartment());
             labInfo.put("description", lab.getLabDescription());
             labInfo.put("createdAt", lab.getCreatedAt());
+            labInfo.put("isActive", lab.getIsActive());
+            
+            // Find the PI of this lab
+            Optional<UserLabMembership> piMembership = userLabMembershipRepository.findByLabIdAndRoleInLabAndIsActiveTrue(lab.getId(), "Lab PI");
+            if (piMembership.isPresent()) {
+                labInfo.put("piUsername", piMembership.get().getUser().getUsername());
+            } else {
+                labInfo.put("piUsername", null);
+            }
+            
+            // Count teams in this lab
+            long teamCount = teamRepository.countByLabId(lab.getId());
+            labInfo.put("teamCount", teamCount);
             
             // Get all members in this lab
             List<UserLabMembership> memberships = userLabMembershipRepository.findByLabIdAndIsActiveTrue(lab.getId());
@@ -1058,6 +1079,25 @@ public class UserService {
             teamInfo.put("teamName", team.getTeamName());
             teamInfo.put("description", team.getTeamDescription());
             teamInfo.put("createdAt", team.getCreatedAt());
+            teamInfo.put("isActive", team.getIsActive());
+            
+            // Get lab information
+            if (team.getLab() != null) {
+                teamInfo.put("labName", team.getLab().getLabName());
+                teamInfo.put("labId", team.getLab().getLabId());
+            } else {
+                teamInfo.put("labName", null);
+                teamInfo.put("labId", null);
+            }
+            
+            // Get team leader information
+            if (team.getTeamLeader() != null) {
+                teamInfo.put("leaderUsername", team.getTeamLeader().getUsername());
+                teamInfo.put("leaderId", team.getTeamLeader().getId());
+            } else {
+                teamInfo.put("leaderUsername", null);
+                teamInfo.put("leaderId", null);
+            }
             
             // Get all members in this team
             List<UserTeamMembership> memberships = userTeamMembershipRepository.findByTeamIdAndIsActiveTrue(team.getId());
@@ -1124,8 +1164,16 @@ public class UserService {
             if (labOpt.isPresent()) {
                 Lab lab = labOpt.get();
                 
-                // Delete all team memberships in this lab's teams
+                // Delete all lab invitations first
+                labInvitationRepository.deleteByLabId(labId);
+                
+                // Delete all team invitations in this lab's teams
                 List<Team> teams = teamRepository.findByLabId(labId);
+                for (Team team : teams) {
+                    teamInvitationRepository.deleteByTeamId(team.getId());
+                }
+                
+                // Delete all team memberships in this lab's teams
                 for (Team team : teams) {
                     userTeamMembershipRepository.deleteByTeamId(team.getId());
                 }
@@ -1155,6 +1203,9 @@ public class UserService {
             Optional<Team> teamOpt = teamRepository.findById(teamId);
             if (teamOpt.isPresent()) {
                 Team team = teamOpt.get();
+                
+                // Delete all team invitations first
+                teamInvitationRepository.deleteByTeamId(teamId);
                 
                 // Delete all team memberships
                 userTeamMembershipRepository.deleteByTeamId(teamId);

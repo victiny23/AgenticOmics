@@ -33,4 +33,7 @@ public interface TeamInvitationRepository extends JpaRepository<TeamInvitation, 
     
     @Query("SELECT COUNT(i) FROM TeamInvitation i WHERE i.invitedUser.username = :username AND i.status = 'PENDING'")
     long countPendingInvitationsByUsername(@Param("username") String username);
+    
+    // Delete methods for Super Admin
+    void deleteByTeamId(Long teamId);
 }

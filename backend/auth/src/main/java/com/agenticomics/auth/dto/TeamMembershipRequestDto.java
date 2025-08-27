@@ -21,7 +21,7 @@ public class TeamMembershipRequestDto {
     private String labId;
     private String requestedRole;
     private String requestMessage;
-    private TeamMembershipRequest.RequestStatus status;
+    private String status;
     private String reviewedByUsername;
     private String reviewMessage;
     private LocalDateTime reviewedAt;
@@ -34,8 +34,16 @@ public class TeamMembershipRequestDto {
         dto.setUserEmail(request.getUser().getEmail());
         dto.setTeamName(request.getTeam().getTeamName());
         dto.setTeamId(request.getTeam().getTeamId());
-        dto.setLabName(request.getTeam().getLab().getLabName());
-        dto.setLabId(request.getTeam().getLab().getLabId());
+        
+        // Safely handle lab relationship
+        if (request.getTeam().getLab() != null) {
+            dto.setLabName(request.getTeam().getLab().getLabName());
+            dto.setLabId(request.getTeam().getLab().getLabId());
+        } else {
+            dto.setLabName(null);
+            dto.setLabId(null);
+        }
+        
         dto.setRequestedRole(request.getRequestedRole());
         dto.setRequestMessage(request.getRequestMessage());
         dto.setStatus(request.getStatus());

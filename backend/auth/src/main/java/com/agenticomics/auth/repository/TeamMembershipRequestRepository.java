@@ -12,23 +12,23 @@ import java.util.Optional;
 @Repository
 public interface TeamMembershipRequestRepository extends JpaRepository<TeamMembershipRequest, Long> {
     
-    @Query("SELECT r FROM TeamMembershipRequest r WHERE r.user.username = :username")
+    @Query("SELECT r FROM TeamMembershipRequest r JOIN FETCH r.team t JOIN FETCH r.user u LEFT JOIN FETCH t.lab WHERE u.username = :username")
     List<TeamMembershipRequest> findByUsername(@Param("username") String username);
     
     @Query("SELECT r FROM TeamMembershipRequest r WHERE r.team.id = :teamId")
     List<TeamMembershipRequest> findByTeamId(@Param("teamId") Long teamId);
     
     @Query("SELECT r FROM TeamMembershipRequest r WHERE r.team.id = :teamId AND r.status = :status")
-    List<TeamMembershipRequest> findByTeamIdAndStatus(@Param("teamId") Long teamId, @Param("status") TeamMembershipRequest.RequestStatus status);
+    List<TeamMembershipRequest> findByTeamIdAndStatus(@Param("teamId") Long teamId, @Param("status") String status);
     
     @Query("SELECT r FROM TeamMembershipRequest r WHERE r.user.username = :username AND r.team.id = :teamId AND r.status = :status")
-    Optional<TeamMembershipRequest> findByUsernameAndTeamIdAndStatus(@Param("username") String username, @Param("teamId") Long teamId, @Param("status") TeamMembershipRequest.RequestStatus status);
+    Optional<TeamMembershipRequest> findByUsernameAndTeamIdAndStatus(@Param("username") String username, @Param("teamId") Long teamId, @Param("status") String status);
     
     @Query("SELECT r FROM TeamMembershipRequest r WHERE r.user.username = :username AND r.team.id = :teamId")
     List<TeamMembershipRequest> findByUsernameAndTeamId(@Param("username") String username, @Param("teamId") Long teamId);
     
     @Query("SELECT r FROM TeamMembershipRequest r WHERE r.status = :status")
-    List<TeamMembershipRequest> findByStatus(@Param("status") TeamMembershipRequest.RequestStatus status);
+    List<TeamMembershipRequest> findByStatus(@Param("status") String status);
     
     @Query("SELECT COUNT(r) FROM TeamMembershipRequest r WHERE r.team.id = :teamId AND r.status = 'PENDING'")
     long countPendingRequestsByTeamId(@Param("teamId") Long teamId);

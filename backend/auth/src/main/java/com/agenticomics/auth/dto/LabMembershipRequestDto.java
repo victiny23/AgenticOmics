@@ -19,7 +19,7 @@ public class LabMembershipRequestDto {
     private String labId;
     private String requestedRole;
     private String requestMessage;
-    private LabMembershipRequest.RequestStatus status;
+    private String status;
     private String reviewedByUsername;
     private String reviewMessage;
     private LocalDateTime reviewedAt;
