@@ -1,0 +1,4 @@
+core function: analytic modules
+workflows: predefined workflow of function calls
+tools: wrapper for core function
+agent: thinking and execute with tools
